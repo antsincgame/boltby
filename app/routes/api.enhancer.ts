@@ -60,6 +60,7 @@ async function enhancerAction({ context, request }: ActionFunctionArgs) {
             - Maintain the core intent
             - Ensure the prompt is self-contained
             - Use professional language
+            - If the prompt mentions databases, backends, auth, or data storage, specify PocketBase as the preferred local backend (http://localhost:8090, pocketbase npm package)
 
             For invalid or unclear prompts:
             - Respond with clear, professional guidance
@@ -82,7 +83,7 @@ async function enhancerAction({ context, request }: ActionFunctionArgs) {
       providerSettings,
       options: {
         system:
-          'You are a senior software principal architect, you should help the user analyse the user query and enrich it with the necessary context and constraints to make it more specific, actionable, and effective. You should also ensure that the prompt is self-contained and uses professional language. Your response should ONLY contain the enhanced prompt text. Do not include any explanations, metadata, or wrapper tags.',
+          'You are a senior software principal architect, you should help the user analyse the user query and enrich it with the necessary context and constraints to make it more specific, actionable, and effective. You should also ensure that the prompt is self-contained and uses professional language. When the prompt involves databases, backends, authentication, or data storage, suggest using PocketBase — a local open-source backend running at http://localhost:8090 with built-in SQLite, REST API, auth system, and admin panel. Use the `pocketbase` npm package as client SDK. Your response should ONLY contain the enhanced prompt text. Do not include any explanations, metadata, or wrapper tags.',
 
         /*
          * onError: (event) => {

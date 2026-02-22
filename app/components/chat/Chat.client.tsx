@@ -6,7 +6,7 @@ import { useStore } from '@nanostores/react';
 import type { Message } from 'ai';
 import { useChat } from 'ai/react';
 import { useAnimate } from 'framer-motion';
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { cssTransition, toast, ToastContainer } from 'react-toastify';
 import { useMessageParser, usePromptEnhancer, useShortcuts } from '~/lib/hooks';
 import { description, useChatHistory } from '~/lib/persistence';
@@ -26,7 +26,6 @@ import { getTemplates, selectStarterTemplate } from '~/utils/selectStarterTempla
 import { logStore } from '~/lib/stores/logs';
 import { streamingState } from '~/lib/stores/streaming';
 import { filesToArtifacts } from '~/utils/fileUtils';
-import { supabaseConnection } from '~/lib/stores/supabase';
 
 const toastAnimation = cssTransition({
   enter: 'animated fadeInRight',
@@ -126,11 +125,7 @@ export const ChatImpl = memo(
     const files = useStore(workbenchStore.files);
     const actionAlert = useStore(workbenchStore.alert);
     const deployAlert = useStore(workbenchStore.deployAlert);
-    const supabaseConn = useStore(supabaseConnection); // Add this line to get Supabase connection
-    const selectedProject = supabaseConn.stats?.projects?.find(
-      (project) => project.id === supabaseConn.selectedProjectId,
-    );
-    const supabaseAlert = useStore(workbenchStore.supabaseAlert);
+    const pocketbaseAlert = useStore(workbenchStore.PocketBaseAlert);
     const { activeProviders, promptId, autoSelectTemplate, contextOptimizationEnabled } = useSettings();
 
     const [model, setModel] = useState(() => {
@@ -168,14 +163,6 @@ export const ChatImpl = memo(
         files,
         promptId,
         contextOptimization: contextOptimizationEnabled,
-        supabase: {
-          isConnected: supabaseConn.isConnected,
-          hasSelectedProject: !!selectedProject,
-          credentials: {
-            supabaseUrl: supabaseConn?.credentials?.supabaseUrl,
-            anonKey: supabaseConn?.credentials?.anonKey,
-          },
-        },
       },
       sendExtraMessageFields: true,
       onError: (e) => {
@@ -249,13 +236,13 @@ export const ChatImpl = memo(
       });
     }, [messages, isLoading, parseMessages]);
 
-    const scrollTextArea = () => {
+    const scrollTextArea = useCallback(() => {
       const textarea = textareaRef.current;
 
       if (textarea) {
         textarea.scrollTop = textarea.scrollHeight;
       }
-    };
+    }, []);
 
     const abort = () => {
       stop();
@@ -466,13 +453,12 @@ export const ChatImpl = memo(
       textareaRef.current?.blur();
     };
 
-    /**
-     * Handles the change event for the textarea and updates the input state.
-     * @param event - The change event from the textarea.
-     */
-    const onTextareaChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
-      handleInputChange(event);
-    };
+    const onTextareaChange = useCallback(
+      (event: React.ChangeEvent<HTMLTextAreaElement>) => {
+        handleInputChange(event);
+      },
+      [handleInputChange],
+    );
 
     /**
      * Debounced function to cache the prompt in cookies.
@@ -494,15 +480,65 @@ export const ChatImpl = memo(
       }
     }, []);
 
-    const handleModelChange = (newModel: string) => {
-      setModel(newModel);
-      Cookies.set('selectedModel', newModel, { expires: 30 });
-    };
+    const handleModelChange = useCallback(
+      (newModel: string) => {
+        setModel(newModel);
+        Cookies.set('selectedModel', newModel, { expires: 30 });
+      },
+      [setModel],
+    );
 
-    const handleProviderChange = (newProvider: ProviderInfo) => {
-      setProvider(newProvider);
-      Cookies.set('selectedProvider', newProvider.name, { expires: 30 });
-    };
+    const handleProviderChange = useCallback(
+      (newProvider: ProviderInfo) => {
+        setProvider(newProvider);
+        Cookies.set('selectedProvider', newProvider.name, { expires: 30 });
+      },
+      [setProvider],
+    );
+
+    const handleStreamingChange = useCallback((streaming: boolean) => {
+      streamingState.set(streaming);
+    }, []);
+
+    const handleInputChangeWithCache = useCallback(
+      (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+        onTextareaChange(e);
+        debouncedCachePrompt(e);
+      },
+      [onTextareaChange, debouncedCachePrompt],
+    );
+
+    const mergedMessages = useMemo(
+      () =>
+        messages.map((message, i) => {
+          if (message.role === 'user') {
+            return message;
+          }
+
+          return {
+            ...message,
+            content: parsedMessages[i] || '',
+          };
+        }),
+      [messages, parsedMessages],
+    );
+
+    const handleEnhancePrompt = useCallback(() => {
+      enhancePrompt(
+        input,
+        (value) => {
+          setInput(value);
+          scrollTextArea();
+        },
+        model,
+        provider,
+        apiKeys,
+      );
+    }, [input, enhancePrompt, setInput, scrollTextArea, model, provider, apiKeys]);
+
+    const clearAlert = useCallback(() => workbenchStore.clearAlert(), []);
+    const clearDeployAlertCb = useCallback(() => workbenchStore.clearDeployAlert(), []);
+    const clearPocketBaseAlertCb = useCallback(() => workbenchStore.clearPocketBaseAlert(), []);
 
     return (
       <BaseChat
@@ -512,9 +548,7 @@ export const ChatImpl = memo(
         showChat={showChat}
         chatStarted={chatStarted}
         isStreaming={isLoading || fakeLoading}
-        onStreamingChange={(streaming) => {
-          streamingState.set(streaming);
-        }}
+        onStreamingChange={handleStreamingChange}
         enhancingPrompt={enhancingPrompt}
         promptEnhanced={promptEnhanced}
         sendMessage={sendMessage}
@@ -523,46 +557,23 @@ export const ChatImpl = memo(
         provider={provider}
         setProvider={handleProviderChange}
         providerList={activeProviders}
-        handleInputChange={(e) => {
-          onTextareaChange(e);
-          debouncedCachePrompt(e);
-        }}
+        handleInputChange={handleInputChangeWithCache}
         handleStop={abort}
         description={description}
         importChat={importChat}
         exportChat={exportChat}
-        messages={messages.map((message, i) => {
-          if (message.role === 'user') {
-            return message;
-          }
-
-          return {
-            ...message,
-            content: parsedMessages[i] || '',
-          };
-        })}
-        enhancePrompt={() => {
-          enhancePrompt(
-            input,
-            (input) => {
-              setInput(input);
-              scrollTextArea();
-            },
-            model,
-            provider,
-            apiKeys,
-          );
-        }}
+        messages={mergedMessages}
+        enhancePrompt={handleEnhancePrompt}
         uploadedFiles={uploadedFiles}
         setUploadedFiles={setUploadedFiles}
         imageDataList={imageDataList}
         setImageDataList={setImageDataList}
         actionAlert={actionAlert}
-        clearAlert={() => workbenchStore.clearAlert()}
-        supabaseAlert={supabaseAlert}
-        clearSupabaseAlert={() => workbenchStore.clearSupabaseAlert()}
+        clearAlert={clearAlert}
         deployAlert={deployAlert}
-        clearDeployAlert={() => workbenchStore.clearDeployAlert()}
+        clearDeployAlert={clearDeployAlertCb}
+        pocketbaseAlert={pocketbaseAlert}
+        clearPocketBaseAlert={clearPocketBaseAlertCb}
         data={chatData}
       />
     );

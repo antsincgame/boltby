@@ -84,7 +84,7 @@ project, please check the [project management guide](./PROJECT.md) to get starte
 - ⬜ **HIGH PRIORITY** - Better prompting for smaller LLMs (code window sometimes doesn't start)
 - ⬜ **HIGH PRIORITY** - Run agents in the backend as opposed to a single model call
 - ✅ Deploy directly to Netlify (@xKevIsDev)
-- ⬜ Supabase Integration
+- ✅ PocketBase Integration (local, offline-first)
 - ⬜ Have LLM plan the project in a MD file for better results/transparency
 - ⬜ VSCode Integration with git-like confirmations
 - ⬜ Upload documents for knowledge - UI design templates, a code base to reference coding style, etc.

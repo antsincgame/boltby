@@ -19,23 +19,36 @@ export async function openDatabase(): Promise<IDBDatabase | undefined> {
   }
 
   return new Promise((resolve) => {
-    const request = indexedDB.open('boltHistory', 2);
+    const request = indexedDB.open('boltHistory', 3);
 
     request.onupgradeneeded = (event: IDBVersionChangeEvent) => {
       const db = (event.target as IDBOpenDBRequest).result;
+      const transaction = (event.target as IDBOpenDBRequest).transaction!;
       const oldVersion = event.oldVersion;
 
       if (oldVersion < 1) {
         if (!db.objectStoreNames.contains('chats')) {
           const store = db.createObjectStore('chats', { keyPath: 'id' });
           store.createIndex('id', 'id', { unique: true });
-          store.createIndex('urlId', 'urlId', { unique: true });
+          store.createIndex('urlId', 'urlId', { unique: false });
         }
       }
 
       if (oldVersion < 2) {
         if (!db.objectStoreNames.contains('snapshots')) {
           db.createObjectStore('snapshots', { keyPath: 'chatId' });
+        }
+      }
+
+      if (oldVersion < 3) {
+        if (db.objectStoreNames.contains('chats')) {
+          const store = transaction.objectStore('chats');
+
+          if (store.indexNames.contains('urlId')) {
+            store.deleteIndex('urlId');
+          }
+
+          store.createIndex('urlId', 'urlId', { unique: false });
         }
       }
     };
@@ -209,7 +222,10 @@ async function getUrlIds(db: IDBDatabase): Promise<string[]> {
       const cursor = (event.target as IDBRequest<IDBCursorWithValue>).result;
 
       if (cursor) {
-        idList.push(cursor.value.urlId);
+        if (cursor.value.urlId) {
+          idList.push(cursor.value.urlId);
+        }
+
         cursor.continue();
       } else {
         resolve(idList);

@@ -1,4 +1,4 @@
-import type { ActionType, BoltAction, BoltActionData, FileAction, ShellAction, SupabaseAction } from '~/types/actions';
+import type { ActionType, BoltAction, BoltActionData, FileAction, PocketBaseAction } from '~/types/actions';
 import type { BoltArtifactData } from '~/types/artifact';
 import { createScopedLogger } from '~/utils/logger';
 import { unreachable } from '~/utils/unreachable';
@@ -50,6 +50,7 @@ interface MessageState {
   currentArtifact?: BoltArtifactData;
   currentAction: BoltActionData;
   actionId: number;
+  lastInput?: string;
 }
 
 function cleanoutMarkdownSyntax(content: string) {
@@ -87,6 +88,8 @@ export class StreamingMessageParser {
 
       this.#messages.set(messageId, state);
     }
+
+    state.lastInput = input;
 
     let output = '';
     let i = state.position;
@@ -283,6 +286,58 @@ export class StreamingMessageParser {
     this.#messages.clear();
   }
 
+  /**
+   * Finalizes any unclosed actions/artifacts for a message.
+   * Called when the LLM stream ends to prevent actions from being stuck in 'running' state
+   * when the model stops generating mid-file (e.g. token limit reached without emitting </boltAction>).
+   */
+  finalize(messageId: string) {
+    const state = this.#messages.get(messageId);
+
+    if (!state) {
+      return;
+    }
+
+    if (state.insideAction && state.currentArtifact) {
+      const currentAction = state.currentAction;
+
+      // Extract remaining content from the last known input
+      let content = (state.lastInput?.slice(state.position) ?? currentAction.content).trim();
+
+      if ('type' in currentAction && currentAction.type === 'file') {
+        if (!currentAction.filePath?.endsWith('.md')) {
+          content = cleanoutMarkdownSyntax(content);
+          content = cleanEscapedTags(content);
+        }
+
+        content += '\n';
+      }
+
+      currentAction.content = content;
+
+      logger.warn('Finalizing unclosed action:', String(state.actionId - 1));
+
+      this._options.callbacks?.onActionClose?.({
+        artifactId: state.currentArtifact.id,
+        messageId,
+        actionId: String(state.actionId - 1),
+        action: currentAction as BoltAction,
+      });
+
+      state.insideAction = false;
+      state.currentAction = { content: '' };
+    }
+
+    if (state.insideArtifact && state.currentArtifact) {
+      logger.warn('Finalizing unclosed artifact:', state.currentArtifact.id);
+
+      this._options.callbacks?.onArtifactClose?.({ messageId, ...state.currentArtifact });
+
+      state.insideArtifact = false;
+      state.currentArtifact = undefined;
+    }
+  }
+
   #parseActionTag(input: string, actionOpenIndex: number, actionEndIndex: number) {
     const actionTag = input.slice(actionOpenIndex, actionEndIndex + 1);
 
@@ -293,25 +348,22 @@ export class StreamingMessageParser {
       content: '',
     };
 
-    if (actionType === 'supabase') {
+    if (actionType === 'pocketbase') {
       const operation = this.#extractAttribute(actionTag, 'operation');
 
-      if (!operation || !['migration', 'query'].includes(operation)) {
-        logger.warn(`Invalid or missing operation for Supabase action: ${operation}`);
-        throw new Error(`Invalid Supabase operation: ${operation}`);
+      if (!operation || !['collection', 'query'].includes(operation)) {
+        logger.warn(`Invalid or missing operation for PocketBase action: ${operation}`);
+        throw new Error(`Invalid PocketBase operation: ${operation}`);
       }
 
-      (actionAttributes as SupabaseAction).operation = operation as 'migration' | 'query';
+      (actionAttributes as PocketBaseAction).operation = operation as 'collection' | 'query';
 
-      if (operation === 'migration') {
+      if (operation === 'collection') {
         const filePath = this.#extractAttribute(actionTag, 'filePath');
 
-        if (!filePath) {
-          logger.warn('Migration requires a filePath');
-          throw new Error('Migration requires a filePath');
+        if (filePath) {
+          (actionAttributes as PocketBaseAction).filePath = filePath;
         }
-
-        (actionAttributes as SupabaseAction).filePath = filePath;
       }
     } else if (actionType === 'file') {
       const filePath = this.#extractAttribute(actionTag, 'filePath') as string;
@@ -325,7 +377,7 @@ export class StreamingMessageParser {
       logger.warn(`Unknown action type '${actionType}'`);
     }
 
-    return actionAttributes as FileAction | ShellAction;
+    return actionAttributes as BoltAction;
   }
 
   #extractAttribute(tag: string, attributeName: string): string | undefined {

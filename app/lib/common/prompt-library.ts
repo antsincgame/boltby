@@ -7,14 +7,6 @@ export interface PromptOptions {
   cwd: string;
   allowedHtmlElements: string[];
   modificationTagName: string;
-  supabase?: {
-    isConnected: boolean;
-    hasSelectedProject: boolean;
-    credentials?: {
-      anonKey?: string;
-      supabaseUrl?: string;
-    };
-  };
 }
 
 export class PromptLibrary {
@@ -29,12 +21,12 @@ export class PromptLibrary {
     default: {
       label: 'Default Prompt',
       description: 'This is the battle tested default system Prompt',
-      get: (options) => getSystemPrompt(options.cwd, options.supabase),
+      get: (options) => getSystemPrompt(options.cwd),
     },
     enhanced: {
       label: 'Fine Tuned Prompt',
       description: 'An fine tuned prompt for better results',
-      get: (options) => getFineTunedPrompt(options.cwd, options.supabase),
+      get: (options) => getFineTunedPrompt(options.cwd),
     },
     optimized: {
       label: 'Optimized Prompt (experimental)',

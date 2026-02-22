@@ -67,6 +67,14 @@ export function useMessageParser() {
         }));
       }
     }
+
+    if (!isLoading) {
+      for (const message of messages) {
+        if (message.role === 'assistant') {
+          messageParser.finalize(message.id);
+        }
+      }
+    }
   }, []);
 
   return { parsedMessages, parseMessages };

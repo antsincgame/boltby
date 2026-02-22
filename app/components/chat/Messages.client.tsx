@@ -1,5 +1,5 @@
 import type { Message } from 'ai';
-import { Fragment } from 'react';
+import { Fragment, useCallback } from 'react';
 import { classNames } from '~/utils/classNames';
 import { AssistantMessage } from './AssistantMessage';
 import { UserMessage } from './UserMessage';
@@ -25,13 +25,16 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
     const location = useLocation();
     const profile = useStore(profileStore);
 
-    const handleRewind = (messageId: string) => {
-      const searchParams = new URLSearchParams(location.search);
-      searchParams.set('rewindTo', messageId);
-      window.location.search = searchParams.toString();
-    };
+    const handleRewind = useCallback(
+      (messageId: string) => {
+        const searchParams = new URLSearchParams(location.search);
+        searchParams.set('rewindTo', messageId);
+        window.location.search = searchParams.toString();
+      },
+      [location.search],
+    );
 
-    const handleFork = async (messageId: string) => {
+    const handleFork = useCallback(async (messageId: string) => {
       try {
         if (!db || !chatId.get()) {
           toast.error('Chat persistence is not available');
@@ -43,7 +46,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
       } catch (error) {
         toast.error('Failed to fork chat: ' + (error as Error).message);
       }
-    };
+    }, []);
 
     return (
       <div id={id} className={props.className} ref={ref}>
@@ -56,12 +59,12 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
               const isHidden = annotations?.includes('hidden');
 
               if (isHidden) {
-                return <Fragment key={index} />;
+                return <Fragment key={messageId ?? index} />;
               }
 
               return (
                 <div
-                  key={index}
+                  key={messageId ?? index}
                   className={classNames('flex gap-4 p-6 py-5 w-full rounded-[calc(0.75rem-1px)]', {
                     'bg-bolt-elements-messages-background': isUserMessage || !isStreaming || (isStreaming && !isLast),
                     'bg-gradient-to-b from-bolt-elements-messages-background from-30% to-transparent':

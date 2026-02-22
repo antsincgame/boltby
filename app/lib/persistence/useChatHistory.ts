@@ -332,15 +332,19 @@ ${value.content}
         return;
       }
 
-      await setMessages(
-        db,
-        finalChatId, // Use the potentially updated chatId
-        [...archivedMessages, ...messages],
-        urlId,
-        description.get(),
-        undefined,
-        chatMetadata.get(),
-      );
+      try {
+        await setMessages(
+          db,
+          finalChatId,
+          [...archivedMessages, ...messages],
+          _urlId,
+          description.get(),
+          undefined,
+          chatMetadata.get(),
+        );
+      } catch (error) {
+        console.error('Failed to save chat messages:', error);
+      }
     },
     duplicateCurrentChat: async (listItemId: string) => {
       if (!db || (!mixedId && !listItemId)) {

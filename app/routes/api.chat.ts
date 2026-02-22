@@ -38,19 +38,11 @@ function parseCookies(cookieHeader: string): Record<string, string> {
 }
 
 async function chatAction({ context, request }: ActionFunctionArgs) {
-  const { messages, files, promptId, contextOptimization, supabase } = await request.json<{
+  const { messages, files, promptId, contextOptimization } = await request.json<{
     messages: Messages;
     files: any;
     promptId?: string;
     contextOptimization: boolean;
-    supabase?: {
-      isConnected: boolean;
-      hasSelectedProject: boolean;
-      credentials?: {
-        anonKey?: string;
-        supabaseUrl?: string;
-      };
-    };
   }>();
 
   const cookieHeader = request.headers.get('Cookie');
@@ -205,7 +197,9 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           await resourceManager.unloadAll();
         }
 
-        if (filePaths.length > 0 && contextOptimization) {
+        const isLocalProvider = targetProviderName === 'Ollama' || targetProviderName === 'LMStudio';
+
+        if (filePaths.length > 0 && contextOptimization && !isLocalProvider) {
           try {
             logger.debug('Generating Chat Summary');
             dataStream.writeData({
@@ -324,10 +318,20 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               message: 'Skipped (error)',
             } satisfies ProgressAnnotation);
           }
+        } else if (isLocalProvider && filePaths.length > 0 && contextOptimization) {
+          logger.info(
+            `Skipping summary/context for local provider ${targetProviderName} — direct stream to avoid 60-105s delay`,
+          );
+          dataStream.writeData({
+            type: 'progress',
+            label: 'summary',
+            status: 'complete',
+            order: progressCounter++,
+            message: 'Skipped (local model — direct response)',
+          } satisfies ProgressAnnotation);
         }
 
         const options: StreamingOptions = {
-          supabaseConnection: supabase,
           toolChoice: 'none',
           onFinish: async ({ text: content, finishReason, usage }) => {
             logger.debug('usage', JSON.stringify(usage));

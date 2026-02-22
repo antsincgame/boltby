@@ -221,7 +221,7 @@ class ResourceManager {
         const warmup = await fetch(`${baseUrl}/api/generate`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ model: keepModel, prompt: 'Hi', options: { num_predict: 1 } }),
+          body: JSON.stringify({ model: keepModel, prompt: 'Hi', options: { num_predict: 1 }, keep_alive: '30m' }),
           signal: AbortSignal.timeout(90_000),
         });
 

@@ -1,7 +1,14 @@
 import type { WebContainer } from '@webcontainer/api';
 import { path as nodePath } from '~/utils/path';
 import { atom, map, type MapStore } from 'nanostores';
-import type { ActionAlert, BoltAction, DeployAlert, FileHistory, SupabaseAction, SupabaseAlert } from '~/types/actions';
+import type {
+  ActionAlert,
+  BoltAction,
+  DeployAlert,
+  FileHistory,
+  PocketBaseAction,
+  PocketBaseAlert,
+} from '~/types/actions';
 import { createScopedLogger } from '~/utils/logger';
 import { unreachable } from '~/utils/unreachable';
 import type { ActionCallbackData } from './message-parser';
@@ -70,7 +77,7 @@ export class ActionRunner {
   runnerId = atom<string>(`${Date.now()}`);
   actions: ActionsMap = map({});
   onAlert?: (alert: ActionAlert) => void;
-  onSupabaseAlert?: (alert: SupabaseAlert) => void;
+  onPocketBaseAlert?: (alert: PocketBaseAlert) => void;
   onDeployAlert?: (alert: DeployAlert) => void;
   buildOutput?: { path: string; exitCode: number; output: string };
 
@@ -78,13 +85,13 @@ export class ActionRunner {
     webcontainerPromise: Promise<WebContainer>,
     getShellTerminal: () => BoltShell,
     onAlert?: (alert: ActionAlert) => void,
-    onSupabaseAlert?: (alert: SupabaseAlert) => void,
+    onPocketBaseAlert?: (alert: PocketBaseAlert) => void,
     onDeployAlert?: (alert: DeployAlert) => void,
   ) {
     this.#webcontainer = webcontainerPromise;
     this.#shellTerminal = getShellTerminal;
     this.onAlert = onAlert;
-    this.onSupabaseAlert = onSupabaseAlert;
+    this.onPocketBaseAlert = onPocketBaseAlert;
     this.onDeployAlert = onDeployAlert;
   }
 
@@ -163,17 +170,14 @@ export class ActionRunner {
           await this.#runFileAction(action);
           break;
         }
-        case 'supabase': {
+        case 'pocketbase': {
           try {
-            await this.handleSupabaseAction(action as SupabaseAction);
+            await this.handlePocketBaseAction(action as PocketBaseAction);
           } catch (error: any) {
-            // Update action status
             this.#updateAction(actionId, {
               status: 'failed',
-              error: error instanceof Error ? error.message : 'Supabase action failed',
+              error: error instanceof Error ? error.message : 'PocketBase action failed',
             });
-
-            // Return early without re-throwing
             return;
           }
           break;
@@ -326,6 +330,7 @@ export class ActionRunner {
       logger.debug(`File written ${relativePath}`);
     } catch (error) {
       logger.error('Failed to write file\n\n', error);
+      throw error;
     }
   }
 
@@ -455,50 +460,43 @@ export class ActionRunner {
       output,
     };
   }
-  async handleSupabaseAction(action: SupabaseAction) {
+  async handlePocketBaseAction(action: PocketBaseAction) {
     const { operation, content, filePath } = action;
-    logger.debug('[Supabase Action]:', { operation, filePath, content });
+    logger.debug('[PocketBase Action]:', { operation, filePath, content });
 
     switch (operation) {
-      case 'migration':
-        if (!filePath) {
-          throw new Error('Migration requires a filePath');
-        }
-
-        // Show alert for migration action
-        this.onSupabaseAlert?.({
+      case 'collection':
+        this.onPocketBaseAlert?.({
           type: 'info',
-          title: 'Supabase Migration',
-          description: `Create migration file: ${filePath}`,
+          title: 'PocketBase Collection',
+          description: 'Create or update collection',
           content,
-          source: 'supabase',
+          source: 'pocketbase',
         });
 
-        // Only create the migration file
-        await this.#runFileAction({
-          type: 'file',
-          filePath,
-          content,
-          changeSource: 'supabase',
-        } as any);
+        if (filePath) {
+          await this.#runFileAction({
+            type: 'file',
+            filePath,
+            content,
+          } as any);
+        }
+
         return { success: true };
 
       case 'query': {
-        // Always show the alert and let the SupabaseAlert component handle connection state
-        this.onSupabaseAlert?.({
+        this.onPocketBaseAlert?.({
           type: 'info',
-          title: 'Supabase Query',
+          title: 'PocketBase Query',
           description: 'Execute database query',
           content,
-          source: 'supabase',
+          source: 'pocketbase',
         });
-
-        // The actual execution will be triggered from SupabaseChatAlert
         return { pending: true };
       }
 
       default:
-        throw new Error(`Unknown operation: ${operation}`);
+        throw new Error(`Unknown PocketBase operation: ${operation}`);
     }
   }
 

@@ -29,17 +29,27 @@ export interface OllamaApiResponse {
 
 /**
  * Pick a safe num_ctx based on model weight file size.
- * Larger models need more RAM per context token, so we cap accordingly.
+ * KV cache grows proportionally to num_ctx × model_dim, so larger models
+ * with big context windows explode GPU memory (e.g. 14B Q5 = 8.4GB file,
+ * but 32K ctx adds ~7GB KV cache → 15GB total, forcing CPU/GPU split).
  */
 function pickNumCtx(modelSizeBytes: number, desiredCtx: number): number {
   const sizeGB = modelSizeBytes / (1024 * 1024 * 1024);
 
   if (sizeGB > 20) {
-    return Math.min(desiredCtx, 8192);
+    return Math.min(desiredCtx, 4096);
   }
 
   if (sizeGB > 10) {
+    return Math.min(desiredCtx, 8192);
+  }
+
+  if (sizeGB > 5) {
     return Math.min(desiredCtx, 16384);
+  }
+
+  if (sizeGB > 3) {
+    return Math.min(desiredCtx, 24576);
   }
 
   return desiredCtx;

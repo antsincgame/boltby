@@ -29,7 +29,7 @@ import type { ProviderInfo } from '~/types/model';
 import { ScreenshotStateManager } from './ScreenshotStateManager';
 import { toast } from 'react-toastify';
 import StarterTemplates from './StarterTemplates';
-import type { ActionAlert, SupabaseAlert, DeployAlert } from '~/types/actions';
+import type { ActionAlert, DeployAlert, PocketBaseAlert } from '~/types/actions';
 import DeployChatAlert from '~/components/deploy/DeployAlert';
 import ChatAlert from './ChatAlert';
 import type { ModelInfo } from '~/lib/modules/llm/types';
@@ -37,8 +37,6 @@ import ProgressCompilation from './ProgressCompilation';
 import type { ProgressAnnotation } from '~/types/context';
 import type { ActionRunner } from '~/lib/runtime/action-runner';
 import { LOCAL_PROVIDERS } from '~/lib/stores/settings';
-import { SupabaseChatAlert } from '~/components/chat/SupabaseAlert';
-import { SupabaseConnection } from './SupabaseConnection';
 import { ExpoQrModal } from '~/components/workbench/ExpoQrModal';
 import { expoUrlAtom } from '~/lib/stores/qrCodeStore';
 import { useStore } from '@nanostores/react';
@@ -76,10 +74,10 @@ interface BaseChatProps {
   setImageDataList?: (dataList: string[]) => void;
   actionAlert?: ActionAlert;
   clearAlert?: () => void;
-  supabaseAlert?: SupabaseAlert;
-  clearSupabaseAlert?: () => void;
   deployAlert?: DeployAlert;
   clearDeployAlert?: () => void;
+  pocketbaseAlert?: PocketBaseAlert;
+  clearPocketBaseAlert?: () => void;
   data?: JSONValue[] | undefined;
   actionRunner?: ActionRunner;
 }
@@ -116,8 +114,8 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       clearAlert,
       deployAlert,
       clearDeployAlert,
-      supabaseAlert,
-      clearSupabaseAlert,
+      pocketbaseAlert,
+      clearPocketBaseAlert,
       data,
       actionRunner,
     },
@@ -129,7 +127,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
     const [isModelSettingsCollapsed, setIsModelSettingsCollapsed] = useState(false);
     const [isListening, setIsListening] = useState(false);
     const [recognition, setRecognition] = useState<SpeechRecognition | null>(null);
-    const [transcript, setTranscript] = useState('');
+    const [, setTranscript] = useState('');
     const [isModelLoading, setIsModelLoading] = useState<string | undefined>('all');
     const [progressAnnotations, setProgressAnnotations] = useState<ProgressAnnotation[]>([]);
     const expoUrl = useStore(expoUrlAtom);
@@ -149,9 +147,6 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
         setProgressAnnotations(progressList);
       }
     }, [data]);
-    useEffect(() => {
-      console.log(transcript);
-    }, [transcript]);
 
     useEffect(() => {
       onStreamingChange?.(isStreaming);
@@ -379,17 +374,6 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                       clearAlert={() => clearDeployAlert?.()}
                       postMessage={(message: string | undefined) => {
                         sendMessage?.({} as any, message);
-                        clearSupabaseAlert?.();
-                      }}
-                    />
-                  )}
-                  {supabaseAlert && (
-                    <SupabaseChatAlert
-                      alert={supabaseAlert}
-                      clearAlert={() => clearSupabaseAlert?.()}
-                      postMessage={(message) => {
-                        sendMessage?.({} as any, message);
-                        clearSupabaseAlert?.();
                       }}
                     />
                   )}
@@ -400,6 +384,16 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                       postMessage={(message) => {
                         sendMessage?.({} as any, message);
                         clearAlert?.();
+                      }}
+                    />
+                  )}
+                  {pocketbaseAlert && (
+                    <ChatAlert
+                      alert={pocketbaseAlert}
+                      clearAlert={() => clearPocketBaseAlert?.()}
+                      postMessage={(message) => {
+                        sendMessage?.({} as any, message);
+                        clearPocketBaseAlert?.();
                       }}
                     />
                   )}
@@ -635,7 +629,6 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                           a new line
                         </div>
                       ) : null}
-                      <SupabaseConnection />
                       <ExpoQrModal open={qrModalOpen} onClose={() => setQrModalOpen(false)} />
                     </div>
                   </div>
