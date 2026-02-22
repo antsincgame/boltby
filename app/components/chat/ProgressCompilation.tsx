@@ -15,13 +15,11 @@ export default function ProgressCompilation({ data }: { data?: ProgressAnnotatio
 
     const progressMap = new Map<string, ProgressAnnotation>();
     data.forEach((x) => {
-      const existingProgress = progressMap.get(x.label);
+      const existing = progressMap.get(x.label);
 
-      if (existingProgress && existingProgress.status === 'complete') {
-        return;
+      if (!existing || x.order >= existing.order) {
+        progressMap.set(x.label, x);
       }
-
-      progressMap.set(x.label, x);
     });
 
     const newData = Array.from(progressMap.values());

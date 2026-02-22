@@ -58,6 +58,8 @@ export const shortcutsStore = map<Shortcuts>({
 
 // Create a single key for provider settings
 const PROVIDER_SETTINGS_KEY = 'provider_settings';
+const PROVIDER_SETTINGS_VERSION_KEY = 'provider_settings_version';
+const CURRENT_SETTINGS_VERSION = 3;
 
 // Add this helper function at the top of the file
 const isBrowser = typeof window !== 'undefined';
@@ -68,29 +70,44 @@ const getInitialProviderSettings = (): ProviderSetting => {
 
   // Start with default settings
   PROVIDER_LIST.forEach((provider) => {
+    const isLocal = LOCAL_PROVIDERS.includes(provider.name);
+    let enabled = !isLocal;
+
+    if (isLocal && provider.config.baseUrlKey) {
+      const baseUrl =
+        typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env[provider.config.baseUrlKey] : undefined;
+      enabled = !!baseUrl;
+    }
+
     initialSettings[provider.name] = {
       ...provider,
       settings: {
-        // Local providers should be disabled by default
-        enabled: !LOCAL_PROVIDERS.includes(provider.name),
+        enabled,
       },
     };
   });
 
   // Only try to load from localStorage in the browser
   if (isBrowser) {
-    const savedSettings = localStorage.getItem(PROVIDER_SETTINGS_KEY);
+    const savedVersion = parseInt(localStorage.getItem(PROVIDER_SETTINGS_VERSION_KEY) || '0', 10);
 
-    if (savedSettings) {
-      try {
-        const parsed = JSON.parse(savedSettings);
-        Object.entries(parsed).forEach(([key, value]) => {
-          if (initialSettings[key]) {
-            initialSettings[key].settings = (value as IProviderConfig).settings;
-          }
-        });
-      } catch (error) {
-        console.error('Error parsing saved provider settings:', error);
+    if (savedVersion < CURRENT_SETTINGS_VERSION) {
+      localStorage.removeItem(PROVIDER_SETTINGS_KEY);
+      localStorage.setItem(PROVIDER_SETTINGS_VERSION_KEY, String(CURRENT_SETTINGS_VERSION));
+    } else {
+      const savedSettings = localStorage.getItem(PROVIDER_SETTINGS_KEY);
+
+      if (savedSettings) {
+        try {
+          const parsed = JSON.parse(savedSettings);
+          Object.entries(parsed).forEach(([key, value]) => {
+            if (initialSettings[key]) {
+              initialSettings[key].settings = (value as IProviderConfig).settings;
+            }
+          });
+        } catch (error) {
+          console.error('Error parsing saved provider settings:', error);
+        }
       }
     }
   }

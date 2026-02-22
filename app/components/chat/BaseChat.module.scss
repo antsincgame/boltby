@@ -39,6 +39,7 @@
   stroke: url(#line-gradient);
   stroke-dasharray: 35px 65px;
   stroke-dashoffset: 10;
+  filter: drop-shadow(0 0 4px rgba(255, 215, 0, 0.3));
 }
 
 .PromptShine {

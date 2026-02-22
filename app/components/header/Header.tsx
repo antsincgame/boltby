@@ -10,20 +10,34 @@ export function Header() {
 
   return (
     <header
-      className={classNames('flex items-center p-5 border-b h-[var(--header-height)]', {
-        'border-transparent': !chat.started,
-        'border-bolt-elements-borderColor': chat.started,
-      })}
+      className={classNames(
+        'flex items-center p-5 h-[var(--header-height)] relative',
+        'border-b backdrop-blur-sm transition-all duration-500',
+        {
+          'border-transparent': !chat.started,
+          'border-[rgba(255,215,0,0.1)]': chat.started,
+        },
+      )}
+      style={{
+        background: chat.started ? 'linear-gradient(180deg, rgba(255,215,0,0.03) 0%, transparent 100%)' : 'transparent',
+      }}
     >
       <div className="flex items-center gap-2 z-logo text-bolt-elements-textPrimary cursor-pointer">
         <div className="i-ph:sidebar-simple-duotone text-xl" />
-        <a href="/" className="text-2xl font-semibold text-accent flex items-center">
-          {/* <span className="i-bolt:logo-text?mask w-[46px] inline-block" /> */}
-          <img src="/logo-light-styled.png" alt="logo" className="w-[90px] inline-block dark:hidden" />
-          <img src="/logo-dark-styled.png" alt="logo" className="w-[90px] inline-block hidden dark:block" />
+        <a href="/" className="text-2xl font-semibold flex items-center group">
+          <img
+            src="/logo-light-styled.png"
+            alt="logo"
+            className="w-[90px] inline-block dark:hidden transition-all duration-300 group-hover:drop-shadow-[0_0_8px_rgba(255,215,0,0.5)]"
+          />
+          <img
+            src="/logo-dark-styled.png"
+            alt="logo"
+            className="w-[90px] inline-block hidden dark:block transition-all duration-300 group-hover:drop-shadow-[0_0_8px_rgba(255,215,0,0.5)]"
+          />
         </a>
       </div>
-      {chat.started && ( // Display ChatDescription and HeaderActionButtons only when the chat has started.
+      {chat.started && (
         <>
           <span className="flex-1 px-4 truncate text-center text-bolt-elements-textPrimary">
             <ClientOnly>{() => <ChatDescription />}</ClientOnly>

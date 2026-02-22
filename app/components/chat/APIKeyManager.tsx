@@ -12,7 +12,7 @@ interface APIKeyManagerProps {
 }
 
 // cache which stores whether the provider's API key is set via environment variable
-const providerEnvKeyStatusCache: Record<string, boolean> = {};
+const providerEnvKeyStatusCache: Record<string, { isSet: boolean; isLocal?: boolean }> = {};
 
 const apiKeyMemoizeCache: { [k: string]: Record<string, string> } = {};
 
@@ -36,6 +36,7 @@ export const APIKeyManager: React.FC<APIKeyManagerProps> = ({ provider, apiKey, 
   const [isEditing, setIsEditing] = useState(false);
   const [tempKey, setTempKey] = useState(apiKey);
   const [isEnvKeySet, setIsEnvKeySet] = useState(false);
+  const [isLocalProvider, setIsLocalProvider] = useState(false);
 
   // Reset states and load saved key when provider changes
   useEffect(() => {
@@ -51,18 +52,20 @@ export const APIKeyManager: React.FC<APIKeyManagerProps> = ({ provider, apiKey, 
   const checkEnvApiKey = useCallback(async () => {
     // Check cache first
     if (providerEnvKeyStatusCache[provider.name] !== undefined) {
-      setIsEnvKeySet(providerEnvKeyStatusCache[provider.name]);
+      const cached = providerEnvKeyStatusCache[provider.name];
+      setIsEnvKeySet(cached.isSet);
+      setIsLocalProvider(cached.isLocal || false);
+
       return;
     }
 
     try {
       const response = await fetch(`/api/check-env-key?provider=${encodeURIComponent(provider.name)}`);
-      const data = await response.json();
-      const isSet = (data as { isSet: boolean }).isSet;
+      const data = (await response.json()) as { isSet: boolean; isLocal?: boolean };
 
-      // Cache the result
-      providerEnvKeyStatusCache[provider.name] = isSet;
-      setIsEnvKeySet(isSet);
+      providerEnvKeyStatusCache[provider.name] = data;
+      setIsEnvKeySet(data.isSet);
+      setIsLocalProvider(data.isLocal || false);
     } catch (error) {
       console.error('Failed to check environment API key:', error);
       setIsEnvKeySet(false);
@@ -89,10 +92,17 @@ export const APIKeyManager: React.FC<APIKeyManagerProps> = ({ provider, apiKey, 
     <div className="flex items-center justify-between py-3 px-1">
       <div className="flex items-center gap-2 flex-1">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-bolt-elements-textSecondary">{provider?.name} API Key:</span>
+          <span className="text-sm font-medium text-bolt-elements-textSecondary">
+            {isLocalProvider ? `${provider?.name}:` : `${provider?.name} API Key:`}
+          </span>
           {!isEditing && (
             <div className="flex items-center gap-2">
-              {apiKey ? (
+              {isLocalProvider && isEnvKeySet ? (
+                <>
+                  <div className="i-ph:check-circle-fill text-green-500 w-4 h-4" />
+                  <span className="text-xs text-green-500">Connected via local server</span>
+                </>
+              ) : apiKey ? (
                 <>
                   <div className="i-ph:check-circle-fill text-green-500 w-4 h-4" />
                   <span className="text-xs text-green-500">Set via UI</span>
@@ -151,7 +161,7 @@ export const APIKeyManager: React.FC<APIKeyManagerProps> = ({ provider, apiKey, 
                 <div className="i-ph:pencil-simple w-4 h-4" />
               </IconButton>
             }
-            {provider?.getApiKeyLink && !apiKey && (
+            {provider?.getApiKeyLink && !apiKey && !isLocalProvider && (
               <IconButton
                 onClick={() => window.open(provider?.getApiKeyLink)}
                 title="Get API Key"

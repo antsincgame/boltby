@@ -27,6 +27,24 @@ export interface OllamaApiResponse {
   models: OllamaModel[];
 }
 
+/**
+ * Pick a safe num_ctx based on model weight file size.
+ * Larger models need more RAM per context token, so we cap accordingly.
+ */
+function pickNumCtx(modelSizeBytes: number, desiredCtx: number): number {
+  const sizeGB = modelSizeBytes / (1024 * 1024 * 1024);
+
+  if (sizeGB > 20) {
+    return Math.min(desiredCtx, 8192);
+  }
+
+  if (sizeGB > 10) {
+    return Math.min(desiredCtx, 16384);
+  }
+
+  return desiredCtx;
+}
+
 export default class OllamaProvider extends BaseProvider {
   name = 'Ollama';
   getApiKeyLink = 'https://ollama.com/download';
@@ -39,12 +57,13 @@ export default class OllamaProvider extends BaseProvider {
 
   staticModels: ModelInfo[] = [];
 
+  private _modelSizeMap = new Map<string, number>();
+
   private _convertEnvToRecord(env?: Env): Record<string, string> {
     if (!env) {
       return {};
     }
 
-    // Convert Env to a plain object with string values
     return Object.entries(env).reduce(
       (acc, [key, value]) => {
         acc[key] = String(value);
@@ -77,10 +96,6 @@ export default class OllamaProvider extends BaseProvider {
     }
 
     if (typeof window === 'undefined') {
-      /*
-       * Running in Server
-       * Backend: Check if we're running in Docker
-       */
       const isDocker = process?.env?.RUNNING_IN_DOCKER === 'true' || serverEnv?.RUNNING_IN_DOCKER === 'true';
 
       baseUrl = isDocker ? baseUrl.replace('localhost', 'host.docker.internal') : baseUrl;
@@ -90,14 +105,20 @@ export default class OllamaProvider extends BaseProvider {
     const response = await fetch(`${baseUrl}/api/tags`);
     const data = (await response.json()) as OllamaApiResponse;
 
-    // console.log({ ollamamodels: data.models });
+    const desiredCtx = this.getDefaultNumCtx(serverEnv as unknown as Env);
 
-    return data.models.map((model: OllamaModel) => ({
-      name: model.name,
-      label: `${model.name} (${model.details.parameter_size})`,
-      provider: this.name,
-      maxTokenAllowed: 8000,
-    }));
+    return data.models.map((model: OllamaModel) => {
+      this._modelSizeMap.set(model.name, model.size);
+
+      const numCtx = pickNumCtx(model.size, desiredCtx);
+
+      return {
+        name: model.name,
+        label: `${model.name} (${model.details.parameter_size})`,
+        provider: this.name,
+        maxTokenAllowed: numCtx,
+      };
+    });
   }
 
   getModelInstance: (options: {
@@ -117,7 +138,6 @@ export default class OllamaProvider extends BaseProvider {
       defaultApiTokenKey: '',
     });
 
-    // Backend: Check if we're running in Docker
     if (!baseUrl) {
       throw new Error('No baseUrl found for OLLAMA provider');
     }
@@ -126,10 +146,14 @@ export default class OllamaProvider extends BaseProvider {
     baseUrl = isDocker ? baseUrl.replace('localhost', 'host.docker.internal') : baseUrl;
     baseUrl = isDocker ? baseUrl.replace('127.0.0.1', 'host.docker.internal') : baseUrl;
 
-    logger.debug('Ollama Base Url used: ', baseUrl);
+    const desiredCtx = this.getDefaultNumCtx(serverEnv);
+    const modelSize = this._modelSizeMap.get(model) || 0;
+    const numCtx = pickNumCtx(modelSize, desiredCtx);
+
+    logger.info(`Ollama: ${model} (${(modelSize / 1e9).toFixed(1)}GB) → num_ctx=${numCtx}`);
 
     const ollamaInstance = ollama(model, {
-      numCtx: this.getDefaultNumCtx(serverEnv),
+      numCtx,
     }) as LanguageModelV1 & { config: any };
 
     ollamaInstance.config.baseURL = `${baseUrl}/api`;

@@ -14,21 +14,33 @@ body {
 }
 
 :root {
-  --gradient-opacity: 0.8;
-  --primary-color: rgba(158, 117, 240, var(--gradient-opacity));
-  --secondary-color: rgba(138, 43, 226, var(--gradient-opacity));
-  --accent-color: rgba(128, 59, 239, var(--gradient-opacity));
-  // --primary-color: rgba(147, 112, 219, var(--gradient-opacity));
-  // --secondary-color: rgba(138, 43, 226, var(--gradient-opacity));
-  // --accent-color: rgba(180, 170, 220, var(--gradient-opacity));
+  --gradient-opacity: 0.6;
+  --primary-color: rgba(255, 215, 0, var(--gradient-opacity));
+  --secondary-color: rgba(0, 245, 255, var(--gradient-opacity));
+  --accent-color: rgba(255, 0, 255, var(--gradient-opacity));
+
+  --neon-gold: #FFD700;
+  --neon-cyan: #00F5FF;
+  --neon-magenta: #FF00FF;
+  --neon-violet: #8B5CF6;
+  --neon-emerald: #00FF88;
+  --void-black: #0A0A14;
+  --deep-space: #0F0F1E;
+}
+
+/* Sacred Geometry Background Pattern */
+[data-theme='dark'] body {
+  background-color: var(--void-black);
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='20' fill='none' stroke='%23ffd700' stroke-width='0.3' opacity='0.06'/%3E%3Ccircle cx='50' cy='30' r='20' fill='none' stroke='%23ffd700' stroke-width='0.3' opacity='0.06'/%3E%3Ccircle cx='67.3' cy='40' r='20' fill='none' stroke='%23ffd700' stroke-width='0.3' opacity='0.06'/%3E%3Ccircle cx='67.3' cy='60' r='20' fill='none' stroke='%23ffd700' stroke-width='0.3' opacity='0.06'/%3E%3Ccircle cx='50' cy='70' r='20' fill='none' stroke='%23ffd700' stroke-width='0.3' opacity='0.06'/%3E%3Ccircle cx='32.7' cy='60' r='20' fill='none' stroke='%23ffd700' stroke-width='0.3' opacity='0.06'/%3E%3Ccircle cx='32.7' cy='40' r='20' fill='none' stroke='%23ffd700' stroke-width='0.3' opacity='0.06'/%3E%3C/svg%3E");
+  background-size: 140px 140px;
 }
 
 .modern-scrollbar {
   overflow: auto;
 
-  // WebKit scrollbar styling
   &::-webkit-scrollbar {
-    width: 2px;
+    width: 3px;
     height: 4px;
   }
 
@@ -37,36 +49,61 @@ body {
   }
 
   &::-webkit-scrollbar-thumb {
-    // Use CSS variables for colors
     background-color: var(--modern-scrollbar-thumb-background);
-    border-radius: 9999px; // pill shape
-    border: 2px solid transparent; // for padding-like effect
+    border-radius: 9999px;
+    border: 2px solid transparent;
     background-clip: content-box;
-    transition: background-color 0.2s ease-in-out; // Add transition
+    transition: background-color 0.3s ease;
   }
 
   &::-webkit-scrollbar-thumb:hover {
-    // Use CSS variable for hover color
     background-color: var(--modern-scrollbar-thumb-backgroundHover);
+    box-shadow: 0 0 6px rgba(255, 215, 0, 0.3);
   }
 
-  // Firefox support
   scrollbar-width: thin;
-  // Use CSS variables for Firefox colors
-  scrollbar-color: var(--modern-scrollbar-thumb-backgroundHover) transparent; // Use hover color for thumb for consistency
+  scrollbar-color: var(--modern-scrollbar-thumb-backgroundHover) transparent;
 }
 
 .modern-scrollbar-invert {
   &::-webkit-scrollbar-thumb {
-    // Override with a contrasting color, e.g., primary text color with transparency
-    background-color: color-mix(in srgb, var(--bolt-elements-textPrimary), transparent 70%);
+    background-color: rgba(255, 215, 0, 0.15);
   }
 
   &::-webkit-scrollbar-thumb:hover {
-    // Darker/more opaque version on hover
-    background-color: color-mix(in srgb, var(--bolt-elements-textPrimary), transparent 50%);
+    background-color: rgba(255, 215, 0, 0.3);
   }
 
-  // Firefox support for inverted colors
-  scrollbar-color: color-mix(in srgb, var(--bolt-elements-textPrimary), transparent 50%) transparent;
+  scrollbar-color: rgba(255, 215, 0, 0.2) transparent;
+}
+
+/* Neon Glow Utilities */
+@keyframes neon-pulse {
+  0%, 100% {
+    box-shadow:
+      0 0 8px rgba(255, 215, 0, 0.2),
+      0 0 16px rgba(255, 215, 0, 0.1);
+  }
+  50% {
+    box-shadow:
+      0 0 16px rgba(255, 215, 0, 0.4),
+      0 0 32px rgba(255, 215, 0, 0.2);
+  }
+}
+
+@keyframes quantum-shimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+@keyframes sacred-rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes float-particle {
+  0%, 100% { transform: translateY(0) scale(1); opacity: 0; }
+  10% { opacity: 0.8; }
+  90% { opacity: 0.8; }
+  100% { transform: translateY(-80vh) scale(0.5); opacity: 0; }
 }

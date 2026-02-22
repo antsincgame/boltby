@@ -8,6 +8,7 @@ import { LLMManager } from '~/lib/modules/llm/manager';
 import type { ModelInfo } from '~/lib/modules/llm/types';
 import { getApiKeysFromCookie, getProviderSettingsFromCookie } from '~/lib/api/cookies';
 import { createScopedLogger } from '~/utils/logger';
+import { resourceManager } from '~/lib/modules/llm/resource-manager';
 
 export async function action(args: ActionFunctionArgs) {
   return llmCallAction(args);
@@ -110,6 +111,20 @@ async function llmCallAction({ context, request }: ActionFunctionArgs) {
       }
 
       logger.info(`Generating response Provider: ${provider.name}, Model: ${modelDetails.name}`);
+
+      const serverEnv = (context.cloudflare?.env || {}) as unknown as Record<string, string>;
+
+      if (provider.name === 'Ollama') {
+        const ollamaBase =
+          serverEnv.OLLAMA_API_BASE_URL || process?.env?.OLLAMA_API_BASE_URL || 'http://127.0.0.1:11434';
+        await resourceManager.prepareOllama(ollamaBase, modelDetails.name);
+      } else if (provider.name === 'LMStudio') {
+        const lmsBase =
+          serverEnv.LMSTUDIO_API_BASE_URL || process?.env?.LMSTUDIO_API_BASE_URL || 'http://127.0.0.1:1234';
+        await resourceManager.prepareLMStudio(lmsBase, modelDetails.name);
+      } else {
+        await resourceManager.unloadAll();
+      }
 
       const result = await generateText({
         system,

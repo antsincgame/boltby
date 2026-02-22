@@ -37,7 +37,15 @@ export const links: LinksFunction = () => [
   },
   {
     rel: 'stylesheet',
-    href: 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap',
+    href: 'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap',
+  },
+  {
+    rel: 'stylesheet',
+    href: 'https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&display=swap',
+  },
+  {
+    rel: 'stylesheet',
+    href: 'https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;600&display=swap',
   },
 ];
 
@@ -48,7 +56,7 @@ const inlineThemeCode = stripIndents`
     let theme = localStorage.getItem('bolt_theme');
 
     if (!theme) {
-      theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      theme = 'dark';
     }
 
     document.querySelector('html')?.setAttribute('data-theme', theme);

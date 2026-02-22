@@ -73,6 +73,10 @@ const gitInfo = getGitInfo();
 
 export default defineConfig((config) => {
   return {
+    server: {
+      host: '0.0.0.0',
+      port: 5173,
+    },
     define: {
       __COMMIT_HASH: JSON.stringify(gitInfo.commitHash),
       __GIT_BRANCH: JSON.stringify(gitInfo.branch),
@@ -138,6 +142,7 @@ export default defineConfig((config) => {
           return null;
         },
       },
+      authKeyPlugin(),
       config.mode !== 'test' && remixCloudflareDevProxy(),
       remixVitePlugin({
         future: {
@@ -168,6 +173,120 @@ export default defineConfig((config) => {
     },
   };
 });
+
+function authKeyPlugin() {
+  return {
+    name: 'auth-key-plugin',
+    configureServer(server: ViteDevServer) {
+      server.middlewares.use((req, res, next) => {
+        const authKey = process.env.AUTH_KEY;
+
+        if (!authKey) {
+          return next();
+        }
+
+        const url = new URL(req.url || '/', `http://${req.headers.host}`);
+
+        // Allow HMR websocket and Vite internal requests
+        if (
+          req.headers.upgrade === 'websocket' ||
+          url.pathname.startsWith('/@') ||
+          url.pathname.startsWith('/__') ||
+          url.pathname.startsWith('/node_modules')
+        ) {
+          return next();
+        }
+
+        const keyFromQuery = url.searchParams.get('key');
+        const cookies = parseCookiesSimple(req.headers.cookie || '');
+        const keyFromCookie = cookies['bolt_auth'];
+
+        if (keyFromQuery === authKey) {
+          res.setHeader(
+            'Set-Cookie',
+            `bolt_auth=${authKey}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000`,
+          );
+          res.writeHead(302, { Location: url.pathname });
+          res.end();
+
+          return;
+        }
+
+        if (keyFromCookie === authKey) {
+          return next();
+        }
+
+        res.statusCode = 401;
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.end(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>bolt.diy — Authentication</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      background: #0d1117; color: #e6edf3; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+    .card {
+      background: #161b22; border: 1px solid #30363d; border-radius: 12px;
+      padding: 2.5rem; max-width: 400px; width: 90%;
+    }
+    h1 { font-size: 1.5rem; margin-bottom: 0.5rem; }
+    p { color: #8b949e; margin-bottom: 1.5rem; font-size: 0.9rem; }
+    input {
+      width: 100%; padding: 0.75rem 1rem; background: #0d1117; border: 1px solid #30363d;
+      border-radius: 8px; color: #e6edf3; font-size: 1rem; margin-bottom: 1rem; outline: none;
+    }
+    input:focus { border-color: #58a6ff; }
+    button {
+      width: 100%; padding: 0.75rem; background: #238636; border: none; border-radius: 8px;
+      color: #fff; font-size: 1rem; font-weight: 600; cursor: pointer;
+    }
+    button:hover { background: #2ea043; }
+    .error { color: #f85149; font-size: 0.85rem; margin-top: 0.5rem; display: none; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>bolt.diy</h1>
+    <p>Enter the access key to continue</p>
+    <form id="authForm">
+      <input type="password" id="keyInput" placeholder="Access key" autofocus autocomplete="off" />
+      <button type="submit">Unlock</button>
+      <div class="error" id="errorMsg">Invalid key. Try again.</div>
+    </form>
+  </div>
+  <script>
+    document.getElementById('authForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+      var key = document.getElementById('keyInput').value;
+      if (key) window.location.href = window.location.pathname + '?key=' + encodeURIComponent(key);
+      else document.getElementById('errorMsg').style.display = 'block';
+    });
+  </script>
+</body>
+</html>`);
+      });
+    },
+  };
+}
+
+function parseCookiesSimple(cookieHeader: string): Record<string, string> {
+  const cookies: Record<string, string> = {};
+
+  for (const part of cookieHeader.split(';')) {
+    const [key, ...vals] = part.trim().split('=');
+
+    if (key) {
+      cookies[key.trim()] = vals.join('=').trim();
+    }
+  }
+
+  return cookies;
+}
 
 function chrome129IssuePlugin() {
   return {

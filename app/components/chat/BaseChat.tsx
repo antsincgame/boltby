@@ -428,16 +428,16 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                         gradientUnits="userSpaceOnUse"
                         gradientTransform="rotate(-45)"
                       >
-                        <stop offset="0%" stopColor="#b44aff" stopOpacity="0%"></stop>
-                        <stop offset="40%" stopColor="#b44aff" stopOpacity="80%"></stop>
-                        <stop offset="50%" stopColor="#b44aff" stopOpacity="80%"></stop>
-                        <stop offset="100%" stopColor="#b44aff" stopOpacity="0%"></stop>
+                        <stop offset="0%" stopColor="#FFD700" stopOpacity="0%"></stop>
+                        <stop offset="40%" stopColor="#FFD700" stopOpacity="80%"></stop>
+                        <stop offset="50%" stopColor="#00F5FF" stopOpacity="60%"></stop>
+                        <stop offset="100%" stopColor="#FF00FF" stopOpacity="0%"></stop>
                       </linearGradient>
                       <linearGradient id="shine-gradient">
-                        <stop offset="0%" stopColor="white" stopOpacity="0%"></stop>
-                        <stop offset="40%" stopColor="#ffffff" stopOpacity="80%"></stop>
-                        <stop offset="50%" stopColor="#ffffff" stopOpacity="80%"></stop>
-                        <stop offset="100%" stopColor="white" stopOpacity="0%"></stop>
+                        <stop offset="0%" stopColor="#FFD700" stopOpacity="0%"></stop>
+                        <stop offset="40%" stopColor="#FFD700" stopOpacity="50%"></stop>
+                        <stop offset="50%" stopColor="#FFE066" stopOpacity="50%"></stop>
+                        <stop offset="100%" stopColor="#FFD700" stopOpacity="0%"></stop>
                       </linearGradient>
                     </defs>
                     <rect className={classNames(styles.PromptEffectLine)} pathLength="100" strokeLinecap="round"></rect>
@@ -563,7 +563,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                         minHeight: TEXTAREA_MIN_HEIGHT,
                         maxHeight: TEXTAREA_MAX_HEIGHT,
                       }}
-                      placeholder="How can Bolt help you today?"
+                      placeholder="What shall we create today?"
                       translate="no"
                     />
                     <ClientOnly>

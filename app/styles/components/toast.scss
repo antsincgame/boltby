@@ -3,15 +3,27 @@
 
   background-color: var(--bolt-elements-bg-depth-2);
   color: var(--bolt-elements-textPrimary);
-  border: 1px solid var(--bolt-elements-borderColor);
+  border: 1px solid rgba(255, 215, 0, 0.12);
+  backdrop-filter: blur(12px);
+  box-shadow:
+    0 4px 16px rgba(0, 0, 0, 0.3),
+    0 0 1px rgba(255, 215, 0, 0.15);
 }
 
 .Toastify__close-button {
   color: var(--bolt-elements-item-contentDefault);
   opacity: 1;
-  transition: none;
+  transition: color 0.2s ease;
 
   &:hover {
-    color: var(--bolt-elements-item-contentActive);
+    color: #FFD700;
   }
+}
+
+.Toastify__progress-bar--success {
+  background: linear-gradient(90deg, #00FF88, #00E67A) !important;
+}
+
+.Toastify__progress-bar--error {
+  background: linear-gradient(90deg, #FF5252, #FF3838) !important;
 }

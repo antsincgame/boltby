@@ -198,6 +198,20 @@ export class LLMManager {
   }
 
   getDefaultProvider(): BaseProvider {
+    const preferredOrder = ['Ollama', 'OpenAILike', 'LMStudio', 'Groq', 'OpenAI', 'Anthropic', 'Google'];
+
+    for (const name of preferredOrder) {
+      const provider = this._providers.get(name);
+
+      if (provider) {
+        const envKey = provider.config.baseUrlKey || provider.config.apiTokenKey;
+
+        if (envKey && this._env[envKey]) {
+          return provider;
+        }
+      }
+    }
+
     const firstProvider = this._providers.values().next().value;
 
     if (!firstProvider) {

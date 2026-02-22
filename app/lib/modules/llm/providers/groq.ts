@@ -13,18 +13,17 @@ export default class GroqProvider extends BaseProvider {
   };
 
   staticModels: ModelInfo[] = [
+    { name: 'llama-3.3-70b-versatile', label: 'Llama 3.3 70b (Groq)', provider: 'Groq', maxTokenAllowed: 32768 },
     { name: 'llama-3.1-8b-instant', label: 'Llama 3.1 8b (Groq)', provider: 'Groq', maxTokenAllowed: 8000 },
-    { name: 'llama-3.2-11b-vision-preview', label: 'Llama 3.2 11b (Groq)', provider: 'Groq', maxTokenAllowed: 8000 },
-    { name: 'llama-3.2-90b-vision-preview', label: 'Llama 3.2 90b (Groq)', provider: 'Groq', maxTokenAllowed: 8000 },
-    { name: 'llama-3.2-3b-preview', label: 'Llama 3.2 3b (Groq)', provider: 'Groq', maxTokenAllowed: 8000 },
-    { name: 'llama-3.2-1b-preview', label: 'Llama 3.2 1b (Groq)', provider: 'Groq', maxTokenAllowed: 8000 },
-    { name: 'llama-3.3-70b-versatile', label: 'Llama 3.3 70b (Groq)', provider: 'Groq', maxTokenAllowed: 8000 },
     {
       name: 'deepseek-r1-distill-llama-70b',
-      label: 'Deepseek R1 Distill Llama 70b (Groq)',
+      label: 'DeepSeek R1 Distill 70b (Groq)',
       provider: 'Groq',
       maxTokenAllowed: 131072,
     },
+    { name: 'qwen-qwq-32b', label: 'Qwen QwQ 32b (Groq)', provider: 'Groq', maxTokenAllowed: 131072 },
+    { name: 'mistral-saba-24b', label: 'Mistral Saba 24b (Groq)', provider: 'Groq', maxTokenAllowed: 32768 },
+    { name: 'gemma2-9b-it', label: 'Gemma 2 9b (Groq)', provider: 'Groq', maxTokenAllowed: 8000 },
   ];
 
   async getDynamicModels(

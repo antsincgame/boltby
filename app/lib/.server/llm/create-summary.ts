@@ -99,9 +99,39 @@ ${summary.summary}`;
       ? (message.content.find((item) => item.type === 'text')?.text as string) || ''
       : message.content;
 
-  // select files from the list of code file from the project that might be useful for the current request from the user
-  const resp = await generateText({
-    system: `
+  const maxCtx = modelDetails?.maxTokenAllowed || 16384;
+  const maxPromptWords = Math.floor(maxCtx * 0.6);
+  let promptMessages = slicedMessages;
+
+  const totalWords = slicedMessages.reduce((sum, m) => sum + extractTextContent(m).split(' ').length, 0);
+
+  if (totalWords > maxPromptWords) {
+    logger.warn(`Summary input too large (${totalWords} words, max ~${maxPromptWords}). Trimming to last messages.`);
+
+    let wordCount = 0;
+    const reversed = [...slicedMessages].reverse();
+    const trimmed: typeof slicedMessages = [];
+
+    for (const msg of reversed) {
+      const words = extractTextContent(msg).split(' ').length;
+
+      if (wordCount + words > maxPromptWords) {
+        break;
+      }
+
+      wordCount += words;
+      trimmed.unshift(msg);
+    }
+
+    promptMessages = trimmed;
+    logger.debug(`Trimmed to ${promptMessages.length} messages (${wordCount} words)`);
+  }
+
+  const SUMMARY_TIMEOUT_MS = 60_000;
+
+  const resp = await Promise.race([
+    generateText({
+      system: `
         You are a software engineer. You are working on a project. you need to summarize the work till now and provide a summary of the chat till now.
 
         Please only use the following format to generate the summary:
@@ -159,7 +189,7 @@ Note:
         * DO not need to think too much just start writing imidiately
         * do not write any thing other that the summary with with the provided structure
         `,
-    prompt: `
+      prompt: `
 
 Here is the previous summary of the chat:
 <old_summary>
@@ -169,7 +199,7 @@ ${summaryText}
 Below is the chat after that:
 ---
 <new_chats>
-${slicedMessages
+${promptMessages
   .map((x) => {
     return `---\n[${x.role}] ${extractTextContent(x)}\n---`;
   })
@@ -179,17 +209,24 @@ ${slicedMessages
 
 Please provide a summary of the chat till now including the hitorical summary of the chat.
 `,
-    model: provider.getModelInstance({
-      model: currentModel,
-      serverEnv,
-      apiKeys,
-      providerSettings,
+      model: provider.getModelInstance({
+        model: currentModel,
+        serverEnv,
+        apiKeys,
+        providerSettings,
+      }),
     }),
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('Summary generation timed out')), SUMMARY_TIMEOUT_MS),
+    ),
+  ]).catch((err) => {
+    logger.warn(`Summary failed: ${err?.message}. Continuing without summary.`);
+    return null;
   });
 
-  const response = resp.text;
+  const response = resp?.text || '';
 
-  if (onFinish) {
+  if (onFinish && resp) {
     onFinish(resp);
   }
 

@@ -8,9 +8,10 @@ import type { IProviderSetting } from '~/types/model';
 import { createScopedLogger } from '~/utils/logger';
 import { getFilePaths, selectContext } from '~/lib/.server/llm/select-context';
 import type { ContextAnnotation, ProgressAnnotation } from '~/types/context';
-import { WORK_DIR } from '~/utils/constants';
+import { DEFAULT_MODEL, DEFAULT_PROVIDER, WORK_DIR } from '~/utils/constants';
 import { createSummary } from '~/lib/.server/llm/create-summary';
 import { extractPropertiesFromMessage } from '~/lib/.server/llm/utils';
+import { resourceManager } from '~/lib/modules/llm/resource-manager';
 
 export async function action(args: ActionFunctionArgs) {
   return chatAction(args);
@@ -85,106 +86,244 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           messageSliceId = messages.length - 3;
         }
 
-        if (filePaths.length > 0 && contextOptimization) {
-          logger.debug('Generating Chat Summary');
+        // Determine provider/model from last user message BEFORE any LLM call
+        let targetModel = DEFAULT_MODEL;
+        let targetProviderName = DEFAULT_PROVIDER.name;
+
+        for (const msg of messages) {
+          if (msg.role === 'user') {
+            const extracted = extractPropertiesFromMessage(msg);
+            targetModel = extracted.model;
+            targetProviderName = extracted.provider;
+          }
+        }
+
+        const envRecord = (context.cloudflare?.env || {}) as unknown as Record<string, string>;
+
+        // Prepare GPU/RAM resources BEFORE any LLM call
+        const ollamaBase =
+          envRecord.OLLAMA_API_BASE_URL || process?.env?.OLLAMA_API_BASE_URL || 'http://127.0.0.1:11434';
+        const lmsBase =
+          envRecord.LMSTUDIO_API_BASE_URL || process?.env?.LMSTUDIO_API_BASE_URL || 'http://127.0.0.1:1234';
+
+        if (targetProviderName === 'Ollama') {
           dataStream.writeData({
             type: 'progress',
-            label: 'summary',
+            label: 'resources',
             status: 'in-progress',
             order: progressCounter++,
-            message: 'Analysing Request',
+            message: `Loading Ollama model: ${targetModel}`,
           } satisfies ProgressAnnotation);
 
-          // Create a summary of the chat
-          console.log(`Messages count: ${messages.length}`);
-
-          summary = await createSummary({
-            messages: [...messages],
-            env: context.cloudflare?.env,
-            apiKeys,
-            providerSettings,
-            promptId,
-            contextOptimization,
-            onFinish(resp) {
-              if (resp.usage) {
-                logger.debug('createSummary token usage', JSON.stringify(resp.usage));
-                cumulativeUsage.completionTokens += resp.usage.completionTokens || 0;
-                cumulativeUsage.promptTokens += resp.usage.promptTokens || 0;
-                cumulativeUsage.totalTokens += resp.usage.totalTokens || 0;
-              }
-            },
-          });
-          dataStream.writeData({
-            type: 'progress',
-            label: 'summary',
-            status: 'complete',
-            order: progressCounter++,
-            message: 'Analysis Complete',
-          } satisfies ProgressAnnotation);
-
-          dataStream.writeMessageAnnotation({
-            type: 'chatSummary',
-            summary,
-            chatId: messages.slice(-1)?.[0]?.id,
-          } as ContextAnnotation);
-
-          // Update context buffer
-          logger.debug('Updating Context Buffer');
-          dataStream.writeData({
-            type: 'progress',
-            label: 'context',
-            status: 'in-progress',
-            order: progressCounter++,
-            message: 'Determining Files to Read',
-          } satisfies ProgressAnnotation);
-
-          // Select context files
-          console.log(`Messages count: ${messages.length}`);
-          filteredFiles = await selectContext({
-            messages: [...messages],
-            env: context.cloudflare?.env,
-            apiKeys,
-            files,
-            providerSettings,
-            promptId,
-            contextOptimization,
-            summary,
-            onFinish(resp) {
-              if (resp.usage) {
-                logger.debug('selectContext token usage', JSON.stringify(resp.usage));
-                cumulativeUsage.completionTokens += resp.usage.completionTokens || 0;
-                cumulativeUsage.promptTokens += resp.usage.promptTokens || 0;
-                cumulativeUsage.totalTokens += resp.usage.totalTokens || 0;
-              }
-            },
-          });
-
-          if (filteredFiles) {
-            logger.debug(`files in context : ${JSON.stringify(Object.keys(filteredFiles))}`);
+          try {
+            await resourceManager.prepareOllama(ollamaBase, targetModel);
+          } catch (rmErr: any) {
+            dataStream.writeData({
+              type: 'progress',
+              label: 'resources',
+              status: 'complete',
+              order: progressCounter++,
+              message: `Error: ${rmErr?.message || 'Ollama not available'}`,
+            } satisfies ProgressAnnotation);
+            throw rmErr;
           }
 
-          dataStream.writeMessageAnnotation({
-            type: 'codeContext',
-            files: Object.keys(filteredFiles).map((key) => {
-              let path = key;
-
-              if (path.startsWith(WORK_DIR)) {
-                path = path.replace(WORK_DIR, '');
-              }
-
-              return path;
-            }),
-          } as ContextAnnotation);
-
           dataStream.writeData({
             type: 'progress',
-            label: 'context',
+            label: 'resources',
             status: 'complete',
             order: progressCounter++,
-            message: 'Code Files Selected',
+            message: `Ollama model ready: ${targetModel}`,
+          } satisfies ProgressAnnotation);
+        } else if (targetProviderName === 'LMStudio') {
+          dataStream.writeData({
+            type: 'progress',
+            label: 'resources',
+            status: 'in-progress',
+            order: progressCounter++,
+            message: `Loading LM Studio model: ${targetModel}`,
           } satisfies ProgressAnnotation);
 
-          // logger.debug('Code Files Selected');
+          try {
+            await resourceManager.prepareLMStudio(lmsBase, targetModel);
+          } catch (rmErr: any) {
+            logger.warn(`LM Studio unavailable, attempting Ollama fallback: ${rmErr?.message}`);
+
+            dataStream.writeData({
+              type: 'progress',
+              label: 'resources',
+              status: 'in-progress',
+              order: progressCounter++,
+              message: `LM Studio unavailable. Trying Ollama fallback...`,
+            } satisfies ProgressAnnotation);
+
+            const ollamaReachable = await resourceManager.isOllamaReachable(ollamaBase);
+
+            if (ollamaReachable) {
+              const fallbackModel = 'qwen2.5-coder:14b-instruct';
+
+              await resourceManager.prepareOllama(ollamaBase, fallbackModel);
+
+              for (let i = messages.length - 1; i >= 0; i--) {
+                if (messages[i].role === 'user') {
+                  const content = Array.isArray(messages[i].content)
+                    ? messages[i].content
+                    : String(messages[i].content);
+
+                  if (typeof content === 'string') {
+                    messages[i] = {
+                      ...messages[i],
+                      content: content
+                        .replace(/\[Model:.*?\]/g, `[Model: ${fallbackModel}]`)
+                        .replace(/\[Provider:.*?\]/g, `[Provider: Ollama]`),
+                    };
+                  }
+
+                  break;
+                }
+              }
+
+              dataStream.writeData({
+                type: 'progress',
+                label: 'resources',
+                status: 'complete',
+                order: progressCounter++,
+                message: `Fallback: using Ollama/${fallbackModel} (LM Studio is offline)`,
+              } satisfies ProgressAnnotation);
+            } else {
+              dataStream.writeData({
+                type: 'progress',
+                label: 'resources',
+                status: 'complete',
+                order: progressCounter++,
+                message: `Error: No local LLM servers available. Start LM Studio or Ollama.`,
+              } satisfies ProgressAnnotation);
+              throw new Error('No local LLM servers available. Please start LM Studio or Ollama.');
+            }
+          }
+        } else {
+          await resourceManager.unloadAll();
+        }
+
+        if (filePaths.length > 0 && contextOptimization) {
+          try {
+            logger.debug('Generating Chat Summary');
+            dataStream.writeData({
+              type: 'progress',
+              label: 'summary',
+              status: 'in-progress',
+              order: progressCounter++,
+              message: 'Analysing Request',
+            } satisfies ProgressAnnotation);
+
+            logger.debug(`Messages count: ${messages.length}`);
+
+            summary = await createSummary({
+              messages: [...messages],
+              env: context.cloudflare?.env,
+              apiKeys,
+              providerSettings,
+              promptId,
+              contextOptimization,
+              onFinish(resp) {
+                if (resp.usage) {
+                  logger.debug('createSummary token usage', JSON.stringify(resp.usage));
+                  cumulativeUsage.completionTokens += resp.usage.completionTokens || 0;
+                  cumulativeUsage.promptTokens += resp.usage.promptTokens || 0;
+                  cumulativeUsage.totalTokens += resp.usage.totalTokens || 0;
+                }
+              },
+            });
+            dataStream.writeData({
+              type: 'progress',
+              label: 'summary',
+              status: 'complete',
+              order: progressCounter++,
+              message: summary ? 'Analysis Complete' : 'Skipped (timeout or too large)',
+            } satisfies ProgressAnnotation);
+
+            if (summary) {
+              dataStream.writeMessageAnnotation({
+                type: 'chatSummary',
+                summary,
+                chatId: messages.slice(-1)?.[0]?.id,
+              } as ContextAnnotation);
+            }
+          } catch (summaryErr: any) {
+            logger.warn(`Summary failed, continuing without it: ${summaryErr?.message}`);
+            dataStream.writeData({
+              type: 'progress',
+              label: 'summary',
+              status: 'complete',
+              order: progressCounter++,
+              message: 'Skipped (error)',
+            } satisfies ProgressAnnotation);
+          }
+
+          try {
+            logger.debug('Updating Context Buffer');
+            dataStream.writeData({
+              type: 'progress',
+              label: 'context',
+              status: 'in-progress',
+              order: progressCounter++,
+              message: 'Determining Files to Read',
+            } satisfies ProgressAnnotation);
+
+            logger.debug(`Messages count: ${messages.length}`);
+            filteredFiles = await selectContext({
+              messages: [...messages],
+              env: context.cloudflare?.env,
+              apiKeys,
+              files,
+              providerSettings,
+              promptId,
+              contextOptimization,
+              summary: summary || '',
+              onFinish(resp) {
+                if (resp.usage) {
+                  logger.debug('selectContext token usage', JSON.stringify(resp.usage));
+                  cumulativeUsage.completionTokens += resp.usage.completionTokens || 0;
+                  cumulativeUsage.promptTokens += resp.usage.promptTokens || 0;
+                  cumulativeUsage.totalTokens += resp.usage.totalTokens || 0;
+                }
+              },
+            });
+
+            if (filteredFiles) {
+              logger.debug(`files in context : ${JSON.stringify(Object.keys(filteredFiles))}`);
+            }
+
+            dataStream.writeMessageAnnotation({
+              type: 'codeContext',
+              files: Object.keys(filteredFiles).map((key) => {
+                let path = key;
+
+                if (path.startsWith(WORK_DIR)) {
+                  path = path.replace(WORK_DIR, '');
+                }
+
+                return path;
+              }),
+            } as ContextAnnotation);
+
+            dataStream.writeData({
+              type: 'progress',
+              label: 'context',
+              status: 'complete',
+              order: progressCounter++,
+              message: 'Code Files Selected',
+            } satisfies ProgressAnnotation);
+          } catch (ctxErr: any) {
+            logger.warn(`Context selection failed, using all files: ${ctxErr?.message}`);
+            dataStream.writeData({
+              type: 'progress',
+              label: 'context',
+              status: 'complete',
+              order: progressCounter++,
+              message: 'Skipped (error)',
+            } satisfies ProgressAnnotation);
+          }
         }
 
         const options: StreamingOptions = {
@@ -258,7 +397,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               for await (const part of result.fullStream) {
                 if (part.type === 'error') {
                   const error: any = part.error;
-                  logger.error(`${error}`);
+                  logger.error(`LLM stream error: ${error?.message || JSON.stringify(error)}`);
 
                   return;
                 }
@@ -295,7 +434,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           for await (const part of result.fullStream) {
             if (part.type === 'error') {
               const error: any = part.error;
-              logger.error(`${error}`);
+              logger.error(`LLM stream error: ${error?.message || JSON.stringify(error)}`);
 
               return;
             }
@@ -303,7 +442,12 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
         })();
         result.mergeIntoDataStream(dataStream);
       },
-      onError: (error: any) => `Custom error: ${error.message}`,
+      onError: (error: any) => {
+        const msg = error?.message || JSON.stringify(error);
+        logger.error(`LLM onError: ${msg}`);
+
+        return `Custom error: ${msg}`;
+      },
     }).pipeThrough(
       new TransformStream({
         transform: (chunk, controller) => {
@@ -352,7 +496,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
       },
     });
   } catch (error: any) {
-    logger.error(error);
+    logger.error(`Chat action failed: ${error?.message || error?.statusText || JSON.stringify(error)}`);
 
     if (error.message?.includes('API key')) {
       throw new Response('Invalid or missing API key', {

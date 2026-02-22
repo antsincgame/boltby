@@ -118,9 +118,11 @@ export async function selectContext(props: {
     throw new Error('No user message found');
   }
 
-  // select files from the list of code file from the project that might be useful for the current request from the user
-  const resp = await generateText({
-    system: `
+  const CONTEXT_TIMEOUT_MS = 45_000;
+
+  const resp = await Promise.race([
+    generateText({
+      system: `
         You are a software engineer. You are working on a project. You have access to the following files:
 
         AVAILABLE FILES PATHS
@@ -152,7 +154,7 @@ export async function selectContext(props: {
         * You should not include any file that is already in the context buffer.
         * If no changes are needed, you can leave the response empty updateContextBuffer tag.
         `,
-    prompt: `
+      prompt: `
         ${summaryText}
 
         Users Question: ${extractTextContent(lastUserMessage)}
@@ -168,19 +170,23 @@ export async function selectContext(props: {
         * if the buffer is full, you need to exclude files that is not needed and include files that is relevent.
 
         `,
-    model: provider.getModelInstance({
-      model: currentModel,
-      serverEnv,
-      apiKeys,
-      providerSettings,
+      model: provider.getModelInstance({
+        model: currentModel,
+        serverEnv,
+        apiKeys,
+        providerSettings,
+      }),
     }),
-  });
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('Context selection timed out')), CONTEXT_TIMEOUT_MS),
+    ),
+  ]);
 
   const response = resp.text;
   const updateContextBuffer = response.match(/<updateContextBuffer>([\s\S]*?)<\/updateContextBuffer>/);
 
   if (!updateContextBuffer) {
-    throw new Error('Invalid response. Please follow the response format');
+    return files;
   }
 
   const includeFiles =
