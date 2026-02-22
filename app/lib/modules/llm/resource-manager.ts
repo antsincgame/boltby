@@ -87,14 +87,47 @@ class ResourceManager {
       }
 
       if (count > 0) {
-        logger.info(`[UNLOAD] Ollama: freed ${count} model(s)`);
-        await sleep(2000);
+        logger.info(`[UNLOAD] Ollama: sent unload for ${count} model(s), waiting for GPU release...`);
+
+        const freed = await this._waitForOllamaUnload(baseUrl);
+
+        if (freed) {
+          logger.info(`[UNLOAD] Ollama: GPU memory freed`);
+        } else {
+          logger.warn(`[UNLOAD] Ollama: timeout waiting for GPU release, forcing continue`);
+        }
       }
     } catch {
       logger.debug('[UNLOAD] Ollama: server not reachable');
     }
 
     return count;
+  }
+
+  private async _waitForOllamaUnload(baseUrl: string, keepModel?: string, timeoutMs: number = 15000): Promise<boolean> {
+    const start = Date.now();
+
+    while (Date.now() - start < timeoutMs) {
+      try {
+        const resp = await fetch(`${baseUrl}/api/ps`, { signal: AbortSignal.timeout(3000) });
+        const data = (await resp.json()) as { models: OllamaPsModel[] };
+        const stillLoaded = (data.models || []).filter((m) => m.name !== keepModel);
+
+        if (stillLoaded.length === 0) {
+          return true;
+        }
+
+        logger.debug(
+          `[WAIT] Ollama: ${stillLoaded.length} model(s) still in VRAM (${((Date.now() - start) / 1000).toFixed(1)}s)`,
+        );
+      } catch {
+        return true;
+      }
+
+      await sleep(500);
+    }
+
+    return false;
   }
 
   private async _unloadAllLMStudio(baseUrl: string): Promise<number> {
@@ -122,14 +155,53 @@ class ResourceManager {
       }
 
       if (count > 0) {
-        logger.info(`[UNLOAD] LMStudio: freed ${count} model(s)`);
-        await sleep(2000);
+        logger.info(`[UNLOAD] LMStudio: sent unload for ${count} model(s), waiting for GPU release...`);
+
+        const freed = await this._waitForLMStudioUnload(baseUrl);
+
+        if (freed) {
+          logger.info(`[UNLOAD] LMStudio: GPU memory freed`);
+        } else {
+          logger.warn(`[UNLOAD] LMStudio: timeout waiting for GPU release, forcing continue`);
+        }
       }
     } catch {
       logger.debug('[UNLOAD] LMStudio: server not reachable');
     }
 
     return count;
+  }
+
+  private async _waitForLMStudioUnload(
+    baseUrl: string,
+    keepModel?: string,
+    timeoutMs: number = 15000,
+  ): Promise<boolean> {
+    const start = Date.now();
+
+    while (Date.now() - start < timeoutMs) {
+      try {
+        const resp = await fetch(`${baseUrl}/api/v1/models`, { signal: AbortSignal.timeout(3000) });
+        const data = (await resp.json()) as { models: LMStudioModelInfo[] };
+        const stillLoaded = (data.models || []).filter(
+          (m) => m.type === 'llm' && m.loaded_instances?.length && m.key !== keepModel,
+        );
+
+        if (stillLoaded.length === 0) {
+          return true;
+        }
+
+        logger.debug(
+          `[WAIT] LMStudio: ${stillLoaded.length} model(s) still in VRAM (${((Date.now() - start) / 1000).toFixed(1)}s)`,
+        );
+      } catch {
+        return true;
+      }
+
+      await sleep(500);
+    }
+
+    return false;
   }
 
   private async _waitForLMStudioModel(baseUrl: string, modelKey: string, timeoutMs: number = 30000): Promise<boolean> {
@@ -208,7 +280,15 @@ class ResourceManager {
       }
 
       if (unloaded > 0) {
-        await sleep(2000);
+        logger.info(`[SWAP] Ollama: waiting for ${unloaded} model(s) to release VRAM...`);
+
+        const freed = await this._waitForOllamaUnload(baseUrl, keepModel);
+
+        if (freed) {
+          logger.info(`[SWAP] Ollama: VRAM freed, ready to load ${keepModel}`);
+        } else {
+          logger.warn(`[SWAP] Ollama: timeout waiting for VRAM release, proceeding anyway`);
+        }
       }
     } catch (err) {
       logger.warn(`[ERROR] Ollama cleanup: ${String(err)}`);
@@ -262,6 +342,7 @@ class ResourceManager {
     await this._unloadAllOllama(this._getOllamaUrl());
 
     let keepModelLoaded = false;
+    let needsWait = false;
 
     try {
       const resp = await fetch(`${baseUrl}/api/v1/models`);
@@ -286,6 +367,19 @@ class ResourceManager {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ instance_id: inst.id }),
           });
+          needsWait = true;
+        }
+      }
+
+      if (needsWait) {
+        logger.info(`[SWAP] LMStudio: waiting for unloaded models to release VRAM...`);
+
+        const freed = await this._waitForLMStudioUnload(baseUrl, keepModel);
+
+        if (freed) {
+          logger.info(`[SWAP] LMStudio: VRAM freed, ready to load ${keepModel}`);
+        } else {
+          logger.warn(`[SWAP] LMStudio: timeout waiting for VRAM release, proceeding anyway`);
         }
       }
 

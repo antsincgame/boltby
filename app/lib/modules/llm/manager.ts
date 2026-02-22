@@ -198,7 +198,7 @@ export class LLMManager {
   }
 
   getDefaultProvider(): BaseProvider {
-    const preferredOrder = ['Ollama', 'OpenAILike', 'LMStudio', 'Groq', 'OpenAI', 'Anthropic', 'Google'];
+    const preferredOrder = ['Ollama', 'LMStudio', 'OpenAILike'];
 
     for (const name of preferredOrder) {
       const provider = this._providers.get(name);

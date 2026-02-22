@@ -1,29 +1,12 @@
 const { execSync, spawnSync } = require('child_process');
 
-// Start LM Studio server if lms CLI is available
-const startLMStudio = () => {
-  const lmsCli = `${process.env.HOME}/.lmstudio/bin/lms`;
-
-  try {
-    const status = spawnSync(lmsCli, ['server', 'status'], { encoding: 'utf8', timeout: 5000 });
-
-    if (status.stdout && status.stdout.includes('not running')) {
-      const result = spawnSync(lmsCli, ['server', 'start'], { encoding: 'utf8', timeout: 10000 });
-
-      if (result.status === 0) {
-        console.log('✅ LM Studio server started on port 1234');
-      } else {
-        console.log('⚠️  LM Studio server could not start:', result.stderr?.trim());
-      }
-    } else {
-      console.log('✅ LM Studio server already running on port 1234');
-    }
-  } catch {
-    console.log('ℹ️  LM Studio CLI not found, skipping');
-  }
-};
-
-startLMStudio();
+// LM Studio auto-start disabled: it competes with Ollama for GPU VRAM.
+// On 8GB GPUs, only ONE local LLM server should hold models in memory.
+// To use LM Studio instead of Ollama, start it manually and stop Ollama.
+//
+// const startLMStudio = () => { ... };
+// startLMStudio();
+console.log('ℹ️  LM Studio auto-start disabled (GPU shared with Ollama)');
 
 const POCKETBASE_VERSION = '0.36.5';
 

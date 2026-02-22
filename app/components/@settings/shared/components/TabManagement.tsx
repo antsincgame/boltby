@@ -17,7 +17,6 @@ const TAB_ICONS: Record<TabType, string> = {
   notifications: 'i-ph:bell-fill',
   features: 'i-ph:star-fill',
   data: 'i-ph:database-fill',
-  'cloud-providers': 'i-ph:cloud-fill',
   'local-providers': 'i-ph:desktop-fill',
   'service-status': 'i-ph:activity-fill',
   connection: 'i-ph:wifi-high-fill',
@@ -32,7 +31,6 @@ const TAB_ICONS: Record<TabType, string> = {
 const DEFAULT_USER_TABS: TabType[] = [
   'features',
   'data',
-  'cloud-providers',
   'local-providers',
   'connection',
   'notifications',

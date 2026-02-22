@@ -71,7 +71,7 @@ const getInitialProviderSettings = (): ProviderSetting => {
   // Start with default settings
   PROVIDER_LIST.forEach((provider) => {
     const isLocal = LOCAL_PROVIDERS.includes(provider.name);
-    let enabled = !isLocal;
+    let enabled = isLocal;
 
     if (isLocal && provider.config.baseUrlKey) {
       const baseUrl =
