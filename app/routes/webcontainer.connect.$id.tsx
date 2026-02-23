@@ -1,9 +1,12 @@
 import { type LoaderFunction } from '@remix-run/cloudflare';
+import { createScopedLogger } from '~/utils/logger';
+
+const log = createScopedLogger('webcontainer.connect');
 
 export const loader: LoaderFunction = async ({ request }) => {
   const url = new URL(request.url);
   const editorOrigin = url.searchParams.get('editorOrigin') || 'https://stackblitz.com';
-  console.log('editorOrigin', editorOrigin);
+  log.debug('editorOrigin', editorOrigin);
 
   const htmlContent = `
     <!DOCTYPE html>

@@ -16,16 +16,7 @@ export function extractPropertiesFromMessage(message: Omit<Message, 'id'>): {
   const modelMatch = textContent.match(MODEL_REGEX);
   const providerMatch = textContent.match(PROVIDER_REGEX);
 
-  /*
-   * Extract model
-   * const modelMatch = message.content.match(MODEL_REGEX);
-   */
   const model = modelMatch ? modelMatch[1] : DEFAULT_MODEL;
-
-  /*
-   * Extract provider
-   * const providerMatch = message.content.match(PROVIDER_REGEX);
-   */
   const provider = providerMatch ? providerMatch[1] : DEFAULT_PROVIDER.name;
 
   const cleanedContent = Array.isArray(message.content)
@@ -86,6 +77,65 @@ export function createFilesContext(files: FileMap, useRelativePath?: boolean) {
     });
 
   return `<boltArtifact id="code-content" title="Code Content" >\n${fileContexts.join('\n')}\n</boltArtifact>`;
+}
+
+/**
+ * Builds a lightweight project context from message history WITHOUT calling any LLM.
+ * Used for local providers (Ollama/LM Studio) to maintain task awareness without
+ * the 60-105s delay of full summarization.
+ */
+export function buildLocalContext(messages: Message[]): string {
+  const createdFiles = new Set<string>();
+  const userGoals: string[] = [];
+  let lastTask = '';
+
+  for (const message of messages) {
+    const text = Array.isArray(message.content)
+      ? (message.content.find((item: any) => item.type === 'text')?.text as string) || ''
+      : (message.content as string) || '';
+
+    if (message.role === 'user') {
+      const cleaned = text.replace(MODEL_REGEX, '').replace(PROVIDER_REGEX, '').trim();
+
+      if (cleaned.length > 10) {
+        userGoals.push(cleaned.slice(0, 200));
+        lastTask = cleaned.slice(0, 400);
+      }
+    } else if (message.role === 'assistant') {
+      const fileMatches = text.matchAll(/<boltAction[^>]*type="file"[^>]*filePath="([^"]+)"/g);
+
+      for (const match of fileMatches) {
+        createdFiles.add(match[1]);
+      }
+    }
+  }
+
+  if (createdFiles.size === 0 && userGoals.length === 0) {
+    return '';
+  }
+
+  const lines: string[] = ['# Local Context (auto-tracked, no LLM call)'];
+
+  if (lastTask) {
+    lines.push(`\n## Current Task\n${lastTask}`);
+  }
+
+  if (userGoals.length > 1) {
+    const prevGoals = userGoals
+      .slice(-5, -1)
+      .map((g) => `- ${g}`)
+      .join('\n');
+    lines.push(`\n## Previous User Requests (last ${Math.min(4, userGoals.length - 1)})\n${prevGoals}`);
+  }
+
+  if (createdFiles.size > 0) {
+    const fileList = Array.from(createdFiles)
+      .map((f) => `- ${f}`)
+      .join('\n');
+    lines.push(`\n## Files Created/Modified in This Session\n${fileList}`);
+  }
+
+  return lines.join('\n');
 }
 
 export function extractCurrentContext(messages: Message[]) {

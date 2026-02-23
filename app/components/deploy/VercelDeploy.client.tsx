@@ -1,6 +1,9 @@
 import { toast } from 'react-toastify';
 import { useStore } from '@nanostores/react';
 import { vercelConnection } from '~/lib/stores/vercel';
+import { createScopedLogger } from '~/utils/logger';
+
+const log = createScopedLogger('VercelDeploy');
 import { workbenchStore } from '~/lib/stores/workbench';
 import { webcontainer } from '~/lib/webcontainer';
 import { path } from '~/utils/path';
@@ -96,10 +99,10 @@ export function useVercelDeploy() {
           await container.fs.readdir(dir);
           finalBuildPath = dir;
           buildPathExists = true;
-          console.log(`Using build directory: ${finalBuildPath}`);
+          log.debug(`Using build directory: ${finalBuildPath}`);
           break;
         } catch (error) {
-          console.log(`Directory ${dir} doesn't exist, trying next option. ${error}`);
+          log.debug(`Directory ${dir} doesn't exist, trying next option.`, error);
 
           // Directory doesn't exist, try the next one
           continue;
@@ -154,7 +157,7 @@ export function useVercelDeploy() {
       const data = (await response.json()) as any;
 
       if (!response.ok || !data.deploy || !data.project) {
-        console.error('Invalid deploy response:', data);
+        log.error('Invalid deploy response:', data);
 
         // Notify that deployment failed
         deployArtifact.runner.handleDeployAction('deploying', 'failed', {
@@ -176,7 +179,7 @@ export function useVercelDeploy() {
 
       return true;
     } catch (err) {
-      console.error('Vercel deploy error:', err);
+      log.error('Vercel deploy error:', err);
       toast.error(err instanceof Error ? err.message : 'Vercel deployment failed');
 
       return false;

@@ -1,5 +1,8 @@
 import type { ActionFunctionArgs, LoaderFunction } from '@remix-run/cloudflare';
 import { json } from '@remix-run/cloudflare';
+import { createScopedLogger } from '~/utils/logger';
+
+const log = createScopedLogger('api.system.process-info');
 
 // Only import child_process if we're not in a Cloudflare environment
 let execSync: any;
@@ -13,7 +16,7 @@ try {
   }
 } catch {
   // In Cloudflare environment, this will fail, which is expected
-  console.log('Running in Cloudflare environment, child_process not available');
+  log.debug('Running in Cloudflare environment, child_process not available');
 }
 
 // For development environments, we'll always provide mock data if real data isn't available
@@ -70,7 +73,7 @@ const getProcessInfo = (): ProcessInfo[] => {
         cpuCount = match ? parseInt(match[0], 10) : 1;
       }
     } catch (error) {
-      console.error('Failed to get CPU count:', error);
+      log.error('Failed to get CPU count:', error);
 
       // Default to 1 if we can't get the count
       cpuCount = 1;
@@ -106,7 +109,7 @@ const getProcessInfo = (): ProcessInfo[] => {
           };
         });
       } catch (error) {
-        console.error('Failed to get macOS process info:', error);
+        log.error('Failed to get macOS process info:', error);
 
         // Try alternative command
         try {
@@ -132,7 +135,7 @@ const getProcessInfo = (): ProcessInfo[] => {
             };
           });
         } catch (fallbackError) {
-          console.error('Failed to get macOS process info with fallback:', fallbackError);
+          log.error('Failed to get macOS process info with fallback:', fallbackError);
           return [
             {
               pid: 0,
@@ -174,7 +177,7 @@ const getProcessInfo = (): ProcessInfo[] => {
           };
         });
       } catch (error) {
-        console.error('Failed to get Linux process info:', error);
+        log.error('Failed to get Linux process info:', error);
 
         // Try alternative command
         try {
@@ -200,7 +203,7 @@ const getProcessInfo = (): ProcessInfo[] => {
             };
           });
         } catch (fallbackError) {
-          console.error('Failed to get Linux process info with fallback:', fallbackError);
+          log.error('Failed to get Linux process info with fallback:', fallbackError);
           return [
             {
               pid: 0,
@@ -236,7 +239,7 @@ const getProcessInfo = (): ProcessInfo[] => {
           timestamp: new Date().toISOString(),
         }));
       } catch (error) {
-        console.error('Failed to get Windows process info:', error);
+        log.error('Failed to get Windows process info:', error);
 
         // Try alternative command using tasklist
         try {
@@ -261,7 +264,7 @@ const getProcessInfo = (): ProcessInfo[] => {
             };
           });
         } catch (fallbackError) {
-          console.error('Failed to get Windows process info with fallback:', fallbackError);
+          log.error('Failed to get Windows process info with fallback:', fallbackError);
           return [
             {
               pid: 0,
@@ -275,7 +278,7 @@ const getProcessInfo = (): ProcessInfo[] => {
         }
       }
     } else {
-      console.warn(`Unsupported platform: ${platform}, using browser fallback`);
+      log.warn(`Unsupported platform: ${platform}, using browser fallback`);
       return [
         {
           pid: 0,
@@ -290,7 +293,7 @@ const getProcessInfo = (): ProcessInfo[] => {
 
     return processes;
   } catch (error) {
-    console.error('Failed to get process info:', error);
+    log.error('Failed to get process info:', error);
 
     if (isDevelopment) {
       return getMockProcessInfo();
@@ -409,7 +412,7 @@ export const loader: LoaderFunction = async ({ request: _request }) => {
   try {
     return json(getProcessInfo());
   } catch (error) {
-    console.error('Failed to get process info:', error);
+    log.error('Failed to get process info:', error);
     return json(getMockProcessInfo(), { status: 500 });
   }
 };
@@ -418,7 +421,7 @@ export const action = async ({ request: _request }: ActionFunctionArgs) => {
   try {
     return json(getProcessInfo());
   } catch (error) {
-    console.error('Failed to get process info:', error);
+    log.error('Failed to get process info:', error);
     return json(getMockProcessInfo(), { status: 500 });
   }
 };

@@ -10,7 +10,7 @@ import { getFilePaths, selectContext } from '~/lib/.server/llm/select-context';
 import type { ContextAnnotation, ProgressAnnotation } from '~/types/context';
 import { DEFAULT_MODEL, DEFAULT_PROVIDER, WORK_DIR } from '~/utils/constants';
 import { createSummary } from '~/lib/.server/llm/create-summary';
-import { extractPropertiesFromMessage } from '~/lib/.server/llm/utils';
+import { buildLocalContext, extractPropertiesFromMessage } from '~/lib/.server/llm/utils';
 import { resourceManager } from '~/lib/modules/llm/resource-manager';
 
 export async function action(args: ActionFunctionArgs) {
@@ -72,10 +72,11 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
         const filePaths = getFilePaths(files || {});
         let filteredFiles: FileMap | undefined = undefined;
         let summary: string | undefined = undefined;
+
         let messageSliceId = 0;
 
-        if (messages.length > 3) {
-          messageSliceId = messages.length - 3;
+        if (messages.length > 5) {
+          messageSliceId = messages.length - 5;
         }
 
         // Determine provider/model from last user message BEFORE any LLM call
@@ -156,19 +157,24 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
 
               await resourceManager.prepareOllama(ollamaBase, fallbackModel);
 
+              const replaceModelTag = (text: string) =>
+                text
+                  .replace(/\[Model:.*?\]/g, `[Model: ${fallbackModel}]`)
+                  .replace(/\[Provider:.*?\]/g, `[Provider: Ollama]`);
+
               for (let i = messages.length - 1; i >= 0; i--) {
                 if (messages[i].role === 'user') {
-                  const content = Array.isArray(messages[i].content)
-                    ? messages[i].content
-                    : String(messages[i].content);
+                  const rawContent = messages[i].content;
 
-                  if (typeof content === 'string') {
+                  if (typeof rawContent === 'string') {
+                    messages[i] = { ...messages[i], content: replaceModelTag(rawContent) };
+                  } else if (Array.isArray(rawContent)) {
                     messages[i] = {
                       ...messages[i],
-                      content: content
-                        .replace(/\[Model:.*?\]/g, `[Model: ${fallbackModel}]`)
-                        .replace(/\[Provider:.*?\]/g, `[Provider: Ollama]`),
-                    };
+                      content: (rawContent as any[]).map((part: any) =>
+                        part?.type === 'text' ? { ...part, text: replaceModelTag(part.text || '') } : part,
+                      ),
+                    } as any;
                   }
 
                   break;
@@ -318,17 +324,29 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               message: 'Skipped (error)',
             } satisfies ProgressAnnotation);
           }
-        } else if (isLocalProvider && filePaths.length > 0 && contextOptimization) {
-          logger.info(
-            `Skipping summary/context for local provider ${targetProviderName} — direct stream to avoid 60-105s delay`,
-          );
-          dataStream.writeData({
-            type: 'progress',
-            label: 'summary',
-            status: 'complete',
-            order: progressCounter++,
-            message: 'Skipped (local model — direct response)',
-          } satisfies ProgressAnnotation);
+        } else if (isLocalProvider && contextOptimization) {
+          // For local providers: use fast deterministic context tracking (no LLM call, no delay)
+          const localCtx = buildLocalContext(messages);
+
+          if (localCtx) {
+            summary = localCtx;
+            logger.info(`[LocalCtx] Built fast context for ${targetProviderName}/${targetModel}`);
+            dataStream.writeData({
+              type: 'progress',
+              label: 'summary',
+              status: 'complete',
+              order: progressCounter++,
+              message: 'Context tracked (local fast-path)',
+            } satisfies ProgressAnnotation);
+          } else {
+            dataStream.writeData({
+              type: 'progress',
+              label: 'summary',
+              status: 'complete',
+              order: progressCounter++,
+              message: 'No prior context',
+            } satisfies ProgressAnnotation);
+          }
         }
 
         const options: StreamingOptions = {
@@ -342,7 +360,13 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               cumulativeUsage.totalTokens += usage.totalTokens || 0;
             }
 
-            if (finishReason !== 'length') {
+            const hasUnclosedArtifact = content.includes('<boltArtifact') && !content.includes('</boltArtifact>');
+            const hasUnclosedAction =
+              content.includes('<boltAction') &&
+              content.split('<boltAction').length > content.split('</boltAction>').length;
+            const isIncomplete = hasUnclosedArtifact || hasUnclosedAction;
+
+            if (finishReason !== 'length' && !isIncomplete) {
               dataStream.writeMessageAnnotation({
                 type: 'usage',
                 value: {
@@ -360,8 +384,13 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               } satisfies ProgressAnnotation);
               await new Promise((resolve) => setTimeout(resolve, 0));
 
-              // stream.close();
               return;
+            }
+
+            if (isIncomplete && finishReason !== 'length') {
+              logger.warn(
+                `Model stopped early with unclosed tags (finishReason=${finishReason}). Forcing continuation.`,
+              );
             }
 
             if (stream.switches >= MAX_RESPONSE_SEGMENTS) {

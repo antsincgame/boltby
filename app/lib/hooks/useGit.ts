@@ -5,6 +5,9 @@ import git, { type GitAuth, type PromiseFsClient } from 'isomorphic-git';
 import http from 'isomorphic-git/http/web';
 import Cookies from 'js-cookie';
 import { toast } from 'react-toastify';
+import { createScopedLogger } from '~/utils/logger';
+
+const log = createScopedLogger('Git');
 
 const lookupSavedPassword = (url: string) => {
   const domain = url.split('/')[2];
@@ -18,7 +21,7 @@ const lookupSavedPassword = (url: string) => {
     const { username, password } = JSON.parse(gitCreds || '{}');
     return { username, password };
   } catch (error) {
-    console.log(`Failed to parse Git Cookie ${error}`);
+    log.warn('Failed to parse Git Cookie', error);
     return null;
   }
 };
@@ -71,7 +74,7 @@ export function useGit() {
         // Add a small delay before retrying to allow for network recovery
         if (retryCount > 0) {
           await new Promise((resolve) => setTimeout(resolve, 1000 * retryCount));
-          console.log(`Retrying git clone (attempt ${retryCount + 1})...`);
+          log.debug('Retrying git clone', { attempt: retryCount + 1 });
         }
 
         await git.clone({
@@ -83,18 +86,16 @@ export function useGit() {
           singleBranch: true,
           corsProxy: '/api/git-proxy',
           headers,
-          onProgress: (event) => {
-            console.log('Git clone progress:', event);
-          },
+          onProgress: () => {},
           onAuth: (url) => {
             let auth = lookupSavedPassword(url);
 
             if (auth) {
-              console.log('Using saved authentication for', url);
+              log.debug('Using saved authentication for', url);
               return auth;
             }
 
-            console.log('Repository requires authentication:', url);
+            log.info('Repository requires authentication:', url);
 
             if (confirm('This repository requires authentication. Would you like to enter your GitHub credentials?')) {
               auth = {
@@ -107,14 +108,14 @@ export function useGit() {
             }
           },
           onAuthFailure: (url, _auth) => {
-            console.error(`Authentication failed for ${url}`);
+            log.error('Authentication failed for', url);
             toast.error(`Authentication failed for ${url.split('/')[2]}. Please check your credentials and try again.`);
             throw new Error(
               `Authentication failed for ${url.split('/')[2]}. Please check your credentials and try again.`,
             );
           },
           onAuthSuccess: (url, auth) => {
-            console.log(`Authentication successful for ${url}`);
+            log.debug('Authentication successful for', url);
             saveGitAuth(url, auth);
           },
         });
@@ -127,7 +128,7 @@ export function useGit() {
 
         return { workdir: webcontainer.workdir, data };
       } catch (error) {
-        console.error('Git clone error:', error);
+        log.error('Git clone error:', error);
 
         // Handle specific error types
         const errorMessage = error instanceof Error ? error.message : String(error);

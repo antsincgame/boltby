@@ -1,3 +1,7 @@
+import { createScopedLogger } from '~/utils/logger';
+
+const log = createScopedLogger('features');
+
 export interface Feature {
   id: string;
   name: string;
@@ -31,5 +35,5 @@ export const getFeatureFlags = async (): Promise<Feature[]> => {
 
 export const markFeatureViewed = async (featureId: string): Promise<void> => {
   /* TODO: Implement actual feature viewed logic */
-  console.log(`Marking feature ${featureId} as viewed`);
+  log.debug(`Marking feature ${featureId} as viewed`);
 };

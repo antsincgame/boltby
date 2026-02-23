@@ -1,5 +1,8 @@
 import type { ActionFunctionArgs, LoaderFunction } from '@remix-run/cloudflare';
 import { json } from '@remix-run/cloudflare';
+import { createScopedLogger } from '~/utils/logger';
+
+const log = createScopedLogger('api.system.memory-info');
 
 // Only import child_process if we're not in a Cloudflare environment
 let execSync: any;
@@ -13,7 +16,7 @@ try {
   }
 } catch {
   // In Cloudflare environment, this will fail, which is expected
-  console.log('Running in Cloudflare environment, child_process not available');
+  log.debug('Running in Cloudflare environment, child_process not available');
 }
 
 // For development environments, we'll always provide mock data if real data isn't available
@@ -139,7 +142,7 @@ const getSystemMemoryInfo = (): SystemMemoryInfo => {
           percentage: swapTotal > 0 ? Math.round((swapUsed / swapTotal) * 100) : 0,
         };
       } catch (swapError) {
-        console.error('Failed to get swap info:', swapError);
+        log.error('Failed to get swap info:', swapError);
       }
     } else if (platform === 'linux') {
       // Linux
@@ -218,7 +221,7 @@ const getSystemMemoryInfo = (): SystemMemoryInfo => {
           percentage: swapTotal > 0 ? Math.round((swapUsed / swapTotal) * 100) : 0,
         };
       } catch (swapError) {
-        console.error('Failed to get swap info:', swapError);
+        log.error('Failed to get swap info:', swapError);
       }
     } else {
       throw new Error(`Unsupported platform: ${platform}`);
@@ -229,7 +232,7 @@ const getSystemMemoryInfo = (): SystemMemoryInfo => {
       timestamp: new Date().toISOString(),
     };
   } catch (error) {
-    console.error('Failed to get system memory info:', error);
+    log.error('Failed to get system memory info:', error);
     return {
       total: 0,
       free: 0,
@@ -245,7 +248,7 @@ export const loader: LoaderFunction = async ({ request: _request }) => {
   try {
     return json(getSystemMemoryInfo());
   } catch (error) {
-    console.error('Failed to get system memory info:', error);
+    log.error('Failed to get system memory info:', error);
     return json(
       {
         total: 0,
@@ -264,7 +267,7 @@ export const action = async ({ request: _request }: ActionFunctionArgs) => {
   try {
     return json(getSystemMemoryInfo());
   } catch (error) {
-    console.error('Failed to get system memory info:', error);
+    log.error('Failed to get system memory info:', error);
     return json(
       {
         total: 0,

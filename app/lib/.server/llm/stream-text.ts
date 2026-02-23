@@ -90,25 +90,47 @@ export async function streamText(props: {
     modelDetails = modelsList.find((m) => m.name === currentModel);
 
     if (!modelDetails) {
-      logger.warn(
-        `MODEL [${currentModel}] not found in provider [${provider.name}] cache. Using requested model directly.`,
-      );
-      modelDetails = {
-        name: currentModel,
-        label: currentModel,
-        provider: provider.name,
-        maxTokenAllowed: 8192,
-      };
+      // Smart fallback: prefer code-capable models, then any available model
+      const codeFallback = modelsList.find((m) => {
+        const id = m.name.toLowerCase();
+        return id.includes('coder') || id.includes('code') || id.includes('qwen') || id.includes('deepseek');
+      });
+      const fallback = codeFallback || modelsList[0];
+
+      if (fallback) {
+        logger.warn(
+          `MODEL [${currentModel}] not found in provider [${provider.name}]. Falling back to [${fallback.name}].`,
+        );
+        modelDetails = fallback;
+        currentModel = fallback.name;
+      } else {
+        logger.warn(
+          `MODEL [${currentModel}] not found in provider [${provider.name}] cache. Using requested model directly.`,
+        );
+        modelDetails = {
+          name: currentModel,
+          label: currentModel,
+          provider: provider.name,
+          maxTokenAllowed: 8192,
+        };
+      }
     }
   }
 
   const dynamicMaxTokens = modelDetails && modelDetails.maxTokenAllowed ? modelDetails.maxTokenAllowed : MAX_TOKENS;
 
-  const useCompactPrompt = !promptId && dynamicMaxTokens <= 16384;
-  const effectivePromptId = promptId || (useCompactPrompt ? 'compact' : 'default');
+  let effectivePromptId = promptId || 'default';
 
-  if (useCompactPrompt) {
-    logger.info(`Using compact prompt for model ${currentModel} (maxTokens=${dynamicMaxTokens})`);
+  if (!promptId) {
+    if (dynamicMaxTokens >= 32768) {
+      effectivePromptId = 'default';
+    } else if (dynamicMaxTokens >= 12288) {
+      effectivePromptId = 'optimized';
+    } else {
+      effectivePromptId = 'compact';
+    }
+
+    logger.info(`Prompt selection: ${effectivePromptId} for ${currentModel} (ctx=${dynamicMaxTokens})`);
   }
 
   let systemPrompt =
@@ -132,21 +154,20 @@ ${codeContext}
 
     if (summary) {
       systemPrompt = `${systemPrompt}
-      below is the chat history till now
-CHAT SUMMARY:
+
+CHAT CONTEXT (session history and current task):
 ---
 ${props.summary}
 ---
 `;
 
       if (props.messageSliceId) {
-        processedMessages = processedMessages.slice(props.messageSliceId);
+        // Keep sliced messages but ensure we always have at least last 5 for continuity
+        const sliced = processedMessages.slice(props.messageSliceId);
+        processedMessages = sliced.length >= 2 ? sliced : processedMessages.slice(-5);
       } else {
-        const lastMessage = processedMessages.pop();
-
-        if (lastMessage) {
-          processedMessages = [lastMessage];
-        }
+        // Keep last 5 messages so model remembers recent conversation turns
+        processedMessages = processedMessages.slice(-5);
       }
     }
   }
@@ -172,7 +193,36 @@ ${lockedFilesListString}
 ---
 `;
   } else {
-    console.log('No locked files found from any source for prompt.');
+    logger.debug('No locked files found from any source for prompt.');
+  }
+
+  const estimateTokens = (text: string) => Math.ceil(text.split(/\s+/).length * 2.5);
+
+  const systemPromptTokens = estimateTokens(systemPrompt);
+  const messageTokens = processedMessages.reduce(
+    (sum, m) => sum + estimateTokens(typeof m.content === 'string' ? m.content : JSON.stringify(m.content)),
+    0,
+  );
+  const SAFETY_MARGIN = 500;
+  const usedTokens = systemPromptTokens + messageTokens + SAFETY_MARGIN;
+  const availableForOutput = Math.max(4096, dynamicMaxTokens - usedTokens);
+
+  logger.info(
+    `Token budget: ctx=${dynamicMaxTokens}, prompt=${systemPromptTokens}, msgs=${messageTokens}, output=${availableForOutput}`,
+  );
+
+  if (availableForOutput < 3000 && effectivePromptId !== 'compact') {
+    logger.warn(`Low token budget (${availableForOutput}). Switching to compact prompt.`);
+
+    const compactPrompt = PromptLibrary.getPropmtFromLibrary('compact', {
+      cwd: WORK_DIR,
+      allowedHtmlElements: allowedHTMLElements,
+      modificationTagName: MODIFICATIONS_TAG_NAME,
+    });
+
+    if (compactPrompt) {
+      systemPrompt = compactPrompt;
+    }
   }
 
   logger.info(`Sending llm call to ${provider.name} with model ${modelDetails.name}`);
@@ -185,7 +235,7 @@ ${lockedFilesListString}
       providerSettings,
     }),
     system: systemPrompt,
-    maxTokens: dynamicMaxTokens,
+    maxTokens: availableForOutput,
     messages: convertToCoreMessages(processedMessages as any),
     ...options,
   });

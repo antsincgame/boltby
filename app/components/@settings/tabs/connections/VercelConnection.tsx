@@ -1,9 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { toast } from 'react-toastify';
+import { createScopedLogger } from '~/utils/logger';
 import { useStore } from '@nanostores/react';
 import { logStore } from '~/lib/stores/logs';
 import { classNames } from '~/utils/classNames';
+
+const log = createScopedLogger('VercelConnection');
 import {
   vercelConnection,
   isConnecting,
@@ -52,7 +55,7 @@ export default function VercelConnection() {
       await fetchVercelStats(connection.token);
       toast.success('Successfully connected to Vercel');
     } catch (error) {
-      console.error('Auth error:', error);
+      log.error('Auth error:', error);
       logStore.logError('Failed to authenticate with Vercel', { error });
       toast.error('Failed to connect to Vercel');
       updateVercelConnection({ user: null, token: '' });
@@ -66,7 +69,7 @@ export default function VercelConnection() {
     toast.success('Disconnected from Vercel');
   };
 
-  console.log('connection', connection);
+  log.debug('connection', connection);
 
   return (
     <motion.div

@@ -2,6 +2,9 @@ import { toast } from 'react-toastify';
 import { useStore } from '@nanostores/react';
 import { netlifyConnection } from '~/lib/stores/netlify';
 import { workbenchStore } from '~/lib/stores/workbench';
+import { createScopedLogger } from '~/utils/logger';
+
+const log = createScopedLogger('NetlifyDeploy');
 import { webcontainer } from '~/lib/webcontainer';
 import { path } from '~/utils/path';
 import { useState } from 'react';
@@ -83,7 +86,7 @@ export function useNetlifyDeploy() {
       // Remove /home/project from buildPath if it exists
       const buildPath = artifact.runner.buildOutput.path.replace('/home/project', '');
 
-      console.log('Original buildPath', buildPath);
+      log.debug('Original buildPath', buildPath);
 
       // Check if the build path exists
       let finalBuildPath = buildPath;
@@ -99,11 +102,11 @@ export function useNetlifyDeploy() {
           await container.fs.readdir(dir);
           finalBuildPath = dir;
           buildPathExists = true;
-          console.log(`Using build directory: ${finalBuildPath}`);
+          log.debug(`Using build directory: ${finalBuildPath}`);
           break;
         } catch (error) {
           // Directory doesn't exist, try the next one
-          console.log(`Directory ${dir} doesn't exist, trying next option. ${error}`);
+          log.debug(`Directory ${dir} doesn't exist, trying next option.`, error);
           continue;
         }
       }
@@ -155,7 +158,7 @@ export function useNetlifyDeploy() {
       const data = (await response.json()) as any;
 
       if (!response.ok || !data.deploy || !data.site) {
-        console.error('Invalid deploy response:', data);
+        log.error('Invalid deploy response:', data);
 
         // Notify that deployment failed
         deployArtifact.runner.handleDeployAction('deploying', 'failed', {
@@ -198,7 +201,7 @@ export function useNetlifyDeploy() {
           attempts++;
           await new Promise((resolve) => setTimeout(resolve, 1000));
         } catch (error) {
-          console.error('Status check error:', error);
+          log.error('Status check error:', error);
           attempts++;
           await new Promise((resolve) => setTimeout(resolve, 2000));
         }
@@ -226,7 +229,7 @@ export function useNetlifyDeploy() {
 
       return true;
     } catch (error) {
-      console.error('Deploy error:', error);
+      log.error('Deploy error:', error);
       toast.error(error instanceof Error ? error.message : 'Deployment failed');
 
       return false;

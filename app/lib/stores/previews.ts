@@ -1,5 +1,8 @@
 import type { WebContainer } from '@webcontainer/api';
 import { atom } from 'nanostores';
+import { createScopedLogger } from '~/utils/logger';
+
+const log = createScopedLogger('PreviewsStore');
 
 // Extend Window interface to include our custom property
 declare global {
@@ -92,7 +95,7 @@ export class PreviewsStore {
           const originalSetItem = Object.getPrototypeOf(localStorage).setItem;
           originalSetItem.call(localStorage, key, value);
         } catch (error) {
-          console.error('[Preview] Error syncing storage:', error);
+          log.error('Error syncing storage:', error);
         }
       });
 
@@ -144,7 +147,7 @@ export class PreviewsStore {
 
     // Listen for server ready events
     webcontainer.on('server-ready', (port, url) => {
-      console.log('[Preview] Server ready on port:', port, url);
+      log.debug('Server ready on port:', port, url);
       this.broadcastUpdate(url);
 
       // Initial storage sync when preview is ready
@@ -187,7 +190,7 @@ export class PreviewsStore {
         });
       }
     } catch (error) {
-      console.error('[Preview] Error setting up watchers:', error);
+      log.error('Error setting up watchers:', error);
     }
 
     // Listen for port events

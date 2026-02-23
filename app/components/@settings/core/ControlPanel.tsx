@@ -4,6 +4,9 @@ import { useStore } from '@nanostores/react';
 import { Switch } from '@radix-ui/react-switch';
 import * as RadixDialog from '@radix-ui/react-dialog';
 import { classNames } from '~/utils/classNames';
+import { createScopedLogger } from '~/utils/logger';
+
+const log = createScopedLogger('ControlPanel');
 import { TabManagement } from '~/components/@settings/shared/components/TabManagement';
 import { TabTile } from '~/components/@settings/shared/components/TabTile';
 import { useUpdateCheck } from '~/lib/hooks/useUpdateCheck';
@@ -176,7 +179,7 @@ export const ControlPanel = ({ open, onClose }: ControlPanelProps) => {
   // Add visibleTabs logic using useMemo with optimized calculations
   const visibleTabs = useMemo(() => {
     if (!tabConfiguration?.userTabs || !Array.isArray(tabConfiguration.userTabs)) {
-      console.warn('Invalid tab configuration, resetting to defaults');
+      log.warn('Invalid tab configuration, resetting to defaults');
       resetTabConfiguration();
 
       return [];
@@ -292,14 +295,9 @@ export const ControlPanel = ({ open, onClose }: ControlPanelProps) => {
   };
 
   const handleDeveloperModeChange = (checked: boolean) => {
-    console.log('Developer mode changed:', checked);
+    log.debug('Developer mode changed:', checked);
     setDeveloperMode(checked);
   };
-
-  // Add effect to log developer mode changes
-  useEffect(() => {
-    console.log('Current developer mode:', developerMode);
-  }, [developerMode]);
 
   const getTabComponent = (tabId: TabType | 'tab-management') => {
     if (tabId === 'tab-management') {

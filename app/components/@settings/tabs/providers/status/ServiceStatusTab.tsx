@@ -82,6 +82,18 @@ const ServiceStatusTab = () => {
         }
       }
 
+      if (!response.ok) {
+        return {
+          service: name,
+          status: 'offline',
+          lastChecked: new Date().toISOString(),
+          url: config.url,
+          icon: config.icon,
+          message: `Service returned HTTP ${response.status}`,
+          responseTime,
+        };
+      }
+
       return {
         service: name,
         status: 'online',

@@ -3,6 +3,9 @@ import { motion } from 'framer-motion';
 import { toast } from 'react-toastify';
 import { logStore } from '~/lib/stores/logs';
 import { classNames } from '~/utils/classNames';
+import { createScopedLogger } from '~/utils/logger';
+
+const log = createScopedLogger('GithubConnection');
 import Cookies from 'js-cookie';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '~/components/ui/Collapsible';
 import { Button } from '~/components/ui/Button';
@@ -107,7 +110,7 @@ export default function GitHubConnection() {
 
   const fetchGithubUser = async (token: string) => {
     try {
-      console.log('Fetching GitHub user with token:', token.substring(0, 5) + '...');
+      log.debug('Fetching GitHub user');
 
       // Use server-side API endpoint instead of direct GitHub API call
       const response = await fetch(`/api/system/git-info?action=getUser`, {
@@ -119,7 +122,7 @@ export default function GitHubConnection() {
       });
 
       if (!response.ok) {
-        console.error('Error fetching GitHub user. Status:', response.status);
+        log.error('Error fetching GitHub user. Status:', response.status);
         throw new Error(`Error: ${response.status}`);
       }
 
@@ -131,13 +134,12 @@ export default function GitHubConnection() {
       };
 
       const data = await response.json();
-      console.log('GitHub user API response:', data);
 
       const { user } = data as { user: GitHubUserResponse };
 
       // Validate that we received a user object
       if (!user || !user.login) {
-        console.error('Invalid user data received:', user);
+        log.error('Invalid user data received');
         throw new Error('Invalid user data received');
       }
 
@@ -173,7 +175,7 @@ export default function GitHubConnection() {
       // Fetch additional GitHub stats
       fetchGitHubStats(token);
     } catch (error) {
-      console.error('Failed to fetch GitHub user:', error);
+      log.error('Failed to fetch GitHub user:', error);
       logStore.logError(`GitHub authentication failed: ${error instanceof Error ? error.message : 'Unknown error'}`, {
         type: 'system',
         message: 'GitHub authentication failed',
@@ -302,7 +304,7 @@ export default function GitHubConnection() {
 
       toast.success('GitHub stats refreshed');
     } catch (error) {
-      console.error('Error fetching GitHub stats:', error);
+      log.error('Error fetching GitHub stats:', error);
       toast.error(`Failed to fetch GitHub stats: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsFetchingStats(false);
@@ -371,11 +373,11 @@ export default function GitHubConnection() {
             parsed.token &&
             (!parsed.stats || !parsed.stats.repos || parsed.stats.repos.length === 0)
           ) {
-            console.log('Fetching missing GitHub stats for saved connection');
+            log.debug('Fetching missing GitHub stats for saved connection');
             await fetchGitHubStats(parsed.token);
           }
         } catch (error) {
-          console.error('Error parsing saved GitHub connection:', error);
+          log.error('Error parsing saved GitHub connection:', error);
           localStorage.removeItem('github_connection');
         }
       } else {
@@ -385,14 +387,13 @@ export default function GitHubConnection() {
         if (envToken) {
           // Check if token type is specified in environment variables
           const envTokenType = import.meta.env.VITE_GITHUB_TOKEN_TYPE;
-          console.log('Environment token type:', envTokenType);
 
           const tokenType =
             envTokenType === 'classic' || envTokenType === 'fine-grained'
               ? (envTokenType as 'classic' | 'fine-grained')
               : 'classic';
 
-          console.log('Using token type:', tokenType);
+          log.debug('Using token type:', tokenType);
 
           // Update both the state and the ref
           tokenTypeRef.current = tokenType;
@@ -405,7 +406,7 @@ export default function GitHubConnection() {
             // Fetch user data with the environment token
             await fetchGithubUser(envToken);
           } catch (error) {
-            console.error('Failed to connect with environment token:', error);
+            log.error('Failed to connect with environment token:', error);
           }
         }
       }
@@ -458,7 +459,7 @@ export default function GitHubConnection() {
         }));
       }
     } catch (error) {
-      console.error('Failed to fetch rate limits:', error);
+      log.error('Failed to fetch rate limits:', error);
     }
   };
 
@@ -508,7 +509,7 @@ export default function GitHubConnection() {
 
       toast.success('Connected to GitHub successfully');
     } catch (error) {
-      console.error('Failed to connect to GitHub:', error);
+      log.error('Failed to connect to GitHub:', error);
 
       // Reset connection state on failure
       setConnection({ user: null, token: connection.token, tokenType: connection.tokenType });

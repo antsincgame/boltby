@@ -374,6 +374,54 @@ docker compose --profile development up
 | Removed debug logging from production | Done |
 | Auto-launch configuration for LM Studio | Done |
 
+### LLM Auto-Correction Engine
+
+| Task | Status |
+|------|--------|
+| 45+ package name corrections (`@lucide/icons-react` → `lucide-react`, etc.) | Done |
+| Auto-remove phantom packages (`@types/lucide-react`, `@shadcn/components`) | Done |
+| `repairTruncatedJson` — fix LLM-truncated `package.json` | Done |
+| `fixViteConfig` — ensure React plugin in Vite config | Done |
+| `fixSourceImports` — fix default vs named imports (PocketBase, axios) | Done |
+| `sanitizeNpmCommand` — clean bad packages from `npm install` commands | Done |
+| Auto-retry `npm install` on 404 errors with package fix | Done |
+| PocketBase `.catch()` auto-wrapper for unhandled async calls | Done |
+
+### GPU Resource Management
+
+| Task | Status |
+|------|--------|
+| Sequential model swapping (Ollama ↔ LM Studio) | Done |
+| VRAM verification before loading new models | Done |
+| Auto-unload of previous model before loading new one | Done |
+| Fallback to Ollama when LM Studio fails | Done |
+| Smart model fallback (prefer code-capable models) | Done |
+| Verify model is actually loaded, not just cached | Done |
+
+### Smart Prompt System
+
+| Task | Status |
+|------|--------|
+| 3-tier prompt selection (default / optimized / compact) by context size | Done |
+| Full PocketBase project example in prompts (pb-setup.js, .env, CRUD) | Done |
+| Auto-continue on unclosed `<boltArtifact>` tags | Done |
+| Dynamic token budget with 4096 minimum output | Done |
+| Enhanced CONTINUE_PROMPT for proper tag closing | Done |
+| `Promise.race` timeout fix in `select-context.ts` | Done |
+
+---
+
+## 🧠 Recommended Models
+
+| Model | Size | VRAM | Use Case |
+|-------|------|------|----------|
+| `qwen2.5-coder:7b-instruct` | 4.4 GB | 6 GB | Simple sites, quick prototypes |
+| `qwen2.5-coder:14b-instruct` | 8.9 GB | 12 GB | Full-stack apps (recommended) |
+| `deepseek-coder-v2:16b` | 8.3 GB | 10 GB | Complex projects with reasoning |
+| `qwen3:8b` | 5.0 GB | 7 GB | General purpose, multilingual |
+
+> For 8 GB VRAM GPUs, use `qwen2.5-coder:7b-instruct` with `DEFAULT_NUM_CTX=16384`.
+
 ---
 
 ## 📁 Project Structure

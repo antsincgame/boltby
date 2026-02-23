@@ -321,8 +321,26 @@ class ResourceManager {
 
   async prepareLMStudio(baseUrl: string, keepModel: string, desiredCtx: number = 32768): Promise<void> {
     if (this._activeProvider === 'LMStudio' && this._activeModel === keepModel) {
-      logger.debug(`[SKIP] LMStudio/${keepModel} already active`);
-      return;
+      // Verify the model is actually loaded before skipping
+      try {
+        const resp = await fetch(`${baseUrl}/api/v1/models`, { signal: AbortSignal.timeout(3000) });
+        const data = (await resp.json()) as { models: LMStudioModelInfo[] };
+        const model = data.models?.find((m) => m.key === keepModel);
+
+        if (model?.loaded_instances?.length) {
+          logger.debug(`[SKIP] LMStudio/${keepModel} already active and verified`);
+          return;
+        }
+
+        logger.warn(
+          `[SKIP-INVALID] LMStudio/${keepModel} was cached as active but is not actually loaded. Re-preparing.`,
+        );
+        this._activeProvider = null;
+        this._activeModel = null;
+      } catch {
+        logger.debug(`[SKIP] LMStudio/${keepModel} already active (could not verify, trusting cache)`);
+        return;
+      }
     }
 
     const reachable = await this.isLMStudioReachable(baseUrl);
@@ -402,10 +420,22 @@ class ResourceManager {
             }),
           });
 
-          const loadResult = await loadResp.json();
+          const loadResult = (await loadResp.json()) as any;
           logger.info(`[LOAD] LMStudio result: ${JSON.stringify(loadResult)}`);
 
-          await this._waitForLMStudioModel(baseUrl, keepModel);
+          if (loadResult?.error) {
+            const errMsg = loadResult.error?.message || JSON.stringify(loadResult.error);
+            throw new Error(`LM Studio failed to load model "${keepModel}": ${errMsg}`);
+          }
+
+          const modelLoaded = await this._waitForLMStudioModel(baseUrl, keepModel);
+
+          if (!modelLoaded) {
+            throw new Error(
+              `LM Studio model "${keepModel}" did not load within timeout. ` +
+                `Possible causes: insufficient VRAM, corrupted model file, or guardrails blocking load.`,
+            );
+          }
         } else {
           throw new Error(
             `Model "${keepModel}" not found in LM Studio. Available models: ${data.models.map((m) => m.key).join(', ')}`,
@@ -413,7 +443,13 @@ class ResourceManager {
         }
       }
     } catch (err) {
-      if (err instanceof Error && (err.message.includes('not running') || err.message.includes('not found'))) {
+      if (
+        err instanceof Error &&
+        (err.message.includes('not running') ||
+          err.message.includes('not found') ||
+          err.message.includes('failed to load') ||
+          err.message.includes('did not load'))
+      ) {
         throw err;
       }
 

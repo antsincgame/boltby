@@ -1,6 +1,9 @@
 import { WebContainer } from '@webcontainer/api';
 import { WORK_DIR_NAME } from '~/utils/constants';
 import { cleanStackTrace } from '~/utils/stacktrace';
+import { createScopedLogger } from '~/utils/logger';
+
+const log = createScopedLogger('WebContainer');
 
 interface WebContainerContext {
   loaded: boolean;
@@ -36,7 +39,7 @@ if (!import.meta.env.SSR) {
 
         // Listen for preview errors
         webcontainer.on('preview-message', (message) => {
-          console.log('WebContainer preview message:', message);
+          log.debug('WebContainer preview message:', message);
 
           // Handle both uncaught exceptions and unhandled promise rejections
           if (message.type === 'PREVIEW_UNCAUGHT_EXCEPTION' || message.type === 'PREVIEW_UNHANDLED_REJECTION') {

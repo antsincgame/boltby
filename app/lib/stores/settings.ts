@@ -1,6 +1,9 @@
 import { atom, map } from 'nanostores';
 import { PROVIDER_LIST } from '~/utils/constants';
 import type { IProviderConfig } from '~/types/model';
+import { createScopedLogger } from '~/utils/logger';
+
+const log = createScopedLogger('Settings');
 import type {
   TabVisibilityConfig,
   TabWindowConfig,
@@ -106,7 +109,7 @@ const getInitialProviderSettings = (): ProviderSetting => {
             }
           });
         } catch (error) {
-          console.error('Error parsing saved provider settings:', error);
+          log.error('Error parsing saved provider settings:', error);
         }
       }
     }
@@ -247,19 +250,16 @@ const getInitialTabConfiguration = (): TabWindowConfig => {
       ),
     };
   } catch (error) {
-    console.warn('Failed to parse tab configuration:', error);
+    log.warn('Failed to parse tab configuration:', error);
     return defaultConfig;
   }
 };
-
-// console.log('Initial tab configuration:', getInitialTabConfiguration());
 
 export const tabConfigurationStore = map<TabWindowConfig>(getInitialTabConfiguration());
 
 // Helper function to update tab configuration
 export const updateTabConfiguration = (config: TabVisibilityConfig) => {
   const currentConfig = tabConfigurationStore.get();
-  console.log('Current tab configuration before update:', currentConfig);
 
   const isUserTab = config.window === 'user';
   const targetArray = isUserTab ? 'userTabs' : 'developerTabs';
@@ -277,8 +277,6 @@ export const updateTabConfiguration = (config: TabVisibilityConfig) => {
     ...currentConfig,
     [targetArray]: updatedTabs,
   };
-
-  console.log('New tab configuration after update:', newConfig);
 
   tabConfigurationStore.set(newConfig);
   Cookies.set('tabConfiguration', JSON.stringify(newConfig), {

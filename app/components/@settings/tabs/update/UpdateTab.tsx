@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useSettings } from '~/lib/hooks/useSettings';
+import { createScopedLogger } from '~/utils/logger';
+
+const log = createScopedLogger('UpdateTab');
 import { logStore } from '~/lib/stores/logs';
 import { toast } from 'react-toastify';
 import { Dialog, DialogRoot, DialogTitle, DialogDescription, DialogButton } from '~/components/ui/Dialog';
@@ -140,7 +143,7 @@ const UpdateTab = () => {
   }, [updateSettings]);
 
   const checkForUpdates = async () => {
-    console.log('Starting update check...');
+    log.debug('Starting update check...');
     setIsChecking(true);
     setError(null);
     setUpdateProgress(null);
@@ -206,7 +209,7 @@ const UpdateTab = () => {
               }
             }
           } catch (e) {
-            console.error('Error parsing progress update:', e);
+            log.error('Error parsing progress update:', e);
           }
         }
       }
@@ -274,7 +277,7 @@ const UpdateTab = () => {
               toast.success('Update completed successfully');
             }
           } catch (e) {
-            console.error('Error parsing update progress:', e);
+            log.error('Error parsing update progress:', e);
           }
         }
       }

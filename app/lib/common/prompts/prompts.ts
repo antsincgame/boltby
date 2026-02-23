@@ -574,15 +574,15 @@ Here are some examples of correct usage of artifacts:
     "preview": "vite preview"
   },
   "dependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
     "react-spring": "^9.7.1"
   },
   "devDependencies": {
-    "@types/react": "^18.0.28",
-    "@types/react-dom": "^18.0.11",
-    "@vitejs/plugin-react": "^3.1.0",
-    "vite": "^4.2.0"
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.0",
+    "vite": "^5.4.0"
   }
 }</boltAction>
 
@@ -606,4 +606,9 @@ Here are some examples of correct usage of artifacts:
 export const CONTINUE_PROMPT = stripIndents`
   Continue your prior response. IMPORTANT: Immediately begin from where you left off without any interruptions.
   Do not repeat any content, including artifact and action tags.
+  Do NOT add any explanations, comments, or text — output ONLY the remaining code/content.
+  If you were in the middle of writing a file, continue writing that file content directly.
+  If a JSON file was cut off, complete it properly with valid JSON.
+  You MUST close all open tags: </boltAction> and </boltArtifact>.
+  Do NOT stop until ALL files are complete and ALL tags are closed.
 `;

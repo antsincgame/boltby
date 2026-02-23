@@ -32,27 +32,26 @@ export interface OllamaApiResponse {
  * KV cache grows proportionally to num_ctx × model_dim, so larger models
  * with big context windows explode GPU memory (e.g. 14B Q5 = 8.4GB file,
  * but 32K ctx adds ~7GB KV cache → 15GB total, forcing CPU/GPU split).
+ *
+ * Minimum is 8192 because bolt.diy system prompt alone is ~6500 tokens.
  */
 function pickNumCtx(modelSizeBytes: number, desiredCtx: number): number {
+  const MIN_CTX = 8192;
   const sizeGB = modelSizeBytes / (1024 * 1024 * 1024);
 
+  let cap = desiredCtx;
+
   if (sizeGB > 20) {
-    return Math.min(desiredCtx, 4096);
+    cap = 8192;
+  } else if (sizeGB > 10) {
+    cap = 12288;
+  } else if (sizeGB > 5) {
+    cap = 16384;
+  } else if (sizeGB > 3) {
+    cap = 24576;
   }
 
-  if (sizeGB > 10) {
-    return Math.min(desiredCtx, 8192);
-  }
-
-  if (sizeGB > 5) {
-    return Math.min(desiredCtx, 16384);
-  }
-
-  if (sizeGB > 3) {
-    return Math.min(desiredCtx, 24576);
-  }
-
-  return desiredCtx;
+  return Math.max(MIN_CTX, Math.min(desiredCtx, cap));
 }
 
 export default class OllamaProvider extends BaseProvider {

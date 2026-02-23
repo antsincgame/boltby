@@ -1,6 +1,9 @@
 import * as React from 'react';
 import { useEffect, useState, useCallback } from 'react';
 import { classNames } from '~/utils/classNames';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('TaskManager');
 import { Line } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -236,7 +239,7 @@ const isServerlessHosting = (): boolean => {
 
   // For testing: Allow forcing serverless mode via URL param for easy testing
   if (typeof window !== 'undefined' && window.location.search.includes('simulate-serverless=true')) {
-    console.log('Simulating serverless environment for testing');
+    logger.debug('Simulating serverless environment for testing');
     return true;
   }
 
@@ -337,7 +340,7 @@ const TaskManagerTab: React.FC = () => {
   // Effect to handle reset and initialization
   useEffect(() => {
     const resetToDefaults = () => {
-      console.log('TaskManagerTab: Resetting to defaults');
+      logger.debug('Resetting to defaults');
 
       // Reset metrics and local state
       setMetrics(DEFAULT_METRICS_STATE);
@@ -346,7 +349,7 @@ const TaskManagerTab: React.FC = () => {
 
       // Reset tab configuration to ensure proper visibility
       const defaultConfig = resetTabConfiguration();
-      console.log('TaskManagerTab: Reset tab configuration:', defaultConfig);
+      logger.debug('Reset tab configuration:', defaultConfig);
     };
 
     // Listen for both storage changes and custom reset event
@@ -365,7 +368,7 @@ const TaskManagerTab: React.FC = () => {
       try {
         await updateMetrics();
       } catch (error) {
-        console.error('Failed to initialize TaskManagerTab:', error);
+        logger.error('Failed to initialize TaskManagerTab:', error);
         resetToDefaults();
       }
     };
@@ -416,7 +419,7 @@ const TaskManagerTab: React.FC = () => {
 
       // For testing: Allow forcing API failures via URL param
       if (typeof window !== 'undefined' && window.location.search.includes('simulate-api-failure=true')) {
-        console.log('Simulating API failures for testing');
+        logger.debug('Simulating API failures for testing');
         setIsNotSupported(true);
 
         return;
@@ -433,7 +436,7 @@ const TaskManagerTab: React.FC = () => {
           setIsNotSupported(true);
         }
       } catch (error) {
-        console.warn('Failed to fetch system metrics. TaskManager features may be limited:', error);
+        logger.error('Failed to fetch system metrics. TaskManager features may be limited:', error);
 
         // Don't automatically disable - we'll show partial data based on what's available
       }
@@ -486,7 +489,7 @@ const TaskManagerTab: React.FC = () => {
         },
       };
     } catch (error) {
-      console.error('Failed to get performance metrics:', error);
+      logger.error('Failed to get performance metrics:', error);
       return {};
     }
   };
@@ -516,34 +519,34 @@ const TaskManagerTab: React.FC = () => {
 
       try {
         const latency = await attemptMeasurement();
-        console.log(`Measured latency: ${latency}ms`);
+        logger.debug(`Measured latency: ${latency}ms`);
 
         return latency;
       } catch (error) {
-        console.warn(`Latency measurement failed, retrying: ${error}`);
+        logger.warn(`Latency measurement failed, retrying:`, error);
 
         try {
           // Retry once
           const latency = await attemptMeasurement();
-          console.log(`Measured latency on retry: ${latency}ms`);
+          logger.debug(`Measured latency on retry: ${latency}ms`);
 
           return latency;
         } catch (retryError) {
-          console.error(`Latency measurement failed after retry: ${retryError}`);
+          logger.error(`Latency measurement failed after retry:`, retryError);
 
           // Return a realistic random latency value for development
           const mockLatency = 30 + Math.floor(Math.random() * 120); // 30-150ms
-          console.log(`Using mock latency: ${mockLatency}ms`);
+          logger.debug(`Using mock latency: ${mockLatency}ms`);
 
           return mockLatency;
         }
       }
     } catch (error) {
-      console.error(`Error in latency measurement: ${error}`);
+      logger.error(`Error in latency measurement:`, error);
 
       // Return a realistic random latency value
       const mockLatency = 30 + Math.floor(Math.random() * 120); // 30-150ms
-      console.log(`Using mock latency due to error: ${mockLatency}ms`);
+      logger.debug(`Using mock latency due to error: ${mockLatency}ms`);
 
       return mockLatency;
     }
@@ -554,7 +557,7 @@ const TaskManagerTab: React.FC = () => {
     try {
       // If we already determined this environment doesn't support system metrics, don't try fetching
       if (isNotSupported) {
-        console.log('TaskManager: System metrics not supported in this environment');
+        logger.debug('System metrics not supported in this environment');
         return;
       }
 
@@ -571,7 +574,7 @@ const TaskManagerTab: React.FC = () => {
 
         if (response.ok) {
           systemMemoryInfo = await response.json();
-          console.log('Memory info response:', systemMemoryInfo);
+          logger.debug('Memory info response:', systemMemoryInfo);
 
           // Use system memory as primary memory metrics if available
           if (systemMemoryInfo && 'used' in systemMemoryInfo) {
@@ -583,7 +586,7 @@ const TaskManagerTab: React.FC = () => {
           }
         }
       } catch (error) {
-        console.error('Failed to fetch system memory info:', error);
+        logger.error('Failed to fetch system memory info:', error);
       }
 
       // Get process information
@@ -594,10 +597,10 @@ const TaskManagerTab: React.FC = () => {
 
         if (response.ok) {
           processInfo = await response.json();
-          console.log('Process info response:', processInfo);
+          logger.debug('Process info response:', processInfo);
         }
       } catch (error) {
-        console.error('Failed to fetch process info:', error);
+        logger.error('Failed to fetch process info:', error);
       }
 
       // Get disk information
@@ -608,10 +611,10 @@ const TaskManagerTab: React.FC = () => {
 
         if (response.ok) {
           diskInfo = await response.json();
-          console.log('Disk info response:', diskInfo);
+          logger.debug('Disk info response:', diskInfo);
         }
       } catch (error) {
-        console.error('Failed to fetch disk info:', error);
+        logger.error('Failed to fetch disk info:', error);
       }
 
       // Get battery info
@@ -632,10 +635,10 @@ const TaskManagerTab: React.FC = () => {
             charging: Math.random() > 0.3,
             timeRemaining: 7200 + Math.floor(Math.random() * 3600),
           };
-          console.log('Battery API not available, using mock data');
+          logger.debug('Battery API not available, using mock data');
         }
       } catch (error) {
-        console.log('Battery API error, using mock data:', error);
+        logger.error('Battery API error, using mock data:', error);
         batteryInfo = {
           level: 75 + Math.floor(Math.random() * 20),
           charging: Math.random() > 0.3,
@@ -739,15 +742,6 @@ const TaskManagerTab: React.FC = () => {
         const cpu = [...prev.cpu, cpuUsage].slice(-MAX_HISTORY_POINTS);
         const disk = [...prev.disk, diskUsage].slice(-MAX_HISTORY_POINTS);
 
-        console.log('Updated metrics history:', {
-          timestamps,
-          memory,
-          battery,
-          network,
-          cpu,
-          disk,
-        });
-
         return { timestamps, memory, battery, network, cpu, disk };
       });
 
@@ -829,16 +823,16 @@ const TaskManagerTab: React.FC = () => {
       }
 
       if (isCloudflare) {
-        console.log('Running in Cloudflare environment. System metrics not available.');
+        logger.debug('Running in Cloudflare environment. System metrics not available.');
       } else if (isLocalDevelopment) {
-        console.log('Running in local development environment. Using real or mock system metrics as available.');
+        logger.debug('Running in local development environment. Using real or mock system metrics as available.');
       } else if (isDevelopment) {
-        console.log('Running in development environment. Using real or mock system metrics as available.');
+        logger.debug('Running in development environment. Using real or mock system metrics as available.');
       } else {
-        console.log('Running in production environment. Using real system metrics.');
+        logger.debug('Running in production environment. Using real system metrics.');
       }
     } catch (error) {
-      console.error('Failed to update metrics:', error);
+      logger.error('Failed to update metrics:', error);
     }
   };
 

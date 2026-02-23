@@ -2,6 +2,9 @@ import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { toast } from 'react-toastify';
 import { classNames } from '~/utils/classNames';
 import { logStore, type LogEntry } from '~/lib/stores/logs';
+import { createScopedLogger } from '~/utils/logger';
+
+const log = createScopedLogger('DebugTab');
 import { useStore } from '@nanostores/react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '~/components/ui/Collapsible';
 import { Progress } from '~/components/ui/Progress';
@@ -326,7 +329,7 @@ export default function DebugTab() {
           };
         });
       } catch (error) {
-        console.error('Failed to fetch git info:', error);
+        log.error('Failed to fetch git info:', error);
       }
     };
 
@@ -435,7 +438,7 @@ export default function DebugTab() {
           level: battery.level * 100,
         };
       } catch {
-        console.log('Battery API not supported');
+        log.debug('Battery API not supported');
       }
 
       // Get storage info
@@ -456,7 +459,7 @@ export default function DebugTab() {
           temporary: !persistent,
         };
       } catch {
-        console.log('Storage API not supported');
+        log.debug('Storage API not supported');
       }
 
       // Get memory info from browser performance API
@@ -539,7 +542,7 @@ export default function DebugTab() {
       toast.success('System information updated');
     } catch (error) {
       toast.error('Failed to get system information');
-      console.error('Failed to get system information:', error);
+      log.error('Failed to get system information:', error);
     } finally {
       setLoading((prev) => ({ ...prev, systemInfo: false }));
     }
@@ -578,8 +581,6 @@ export default function DebugTab() {
       const appData = (await appResponse.json()) as Omit<WebAppInfo, 'gitInfo'>;
       const gitData = (await gitResponse.json()) as GitInfo;
 
-      console.log('Git Info Response:', gitData); // Add logging to debug
-
       setWebAppInfo({
         ...appData,
         gitInfo: gitData,
@@ -589,7 +590,7 @@ export default function DebugTab() {
 
       return true;
     } catch (error) {
-      console.error('Failed to fetch webapp info:', error);
+      log.error('Failed to fetch webapp info:', error);
       toast.error('Failed to fetch webapp information');
       setWebAppInfo(null);
 
@@ -677,7 +678,7 @@ export default function DebugTab() {
       toast.success('Performance metrics logged');
     } catch (error) {
       toast.error('Failed to log performance metrics');
-      console.error('Failed to log performance metrics:', error);
+      log.error('Failed to log performance metrics:', error);
     } finally {
       setLoading((prev) => ({ ...prev, performance: false }));
     }
@@ -697,7 +698,7 @@ export default function DebugTab() {
       }
     } catch (error) {
       toast.error('Failed to check errors');
-      console.error('Failed to check errors:', error);
+      log.error('Failed to check errors:', error);
     } finally {
       setLoading((prev) => ({ ...prev, errors: false }));
     }
@@ -728,7 +729,7 @@ export default function DebugTab() {
       document.body.removeChild(a);
       toast.success('Debug information exported successfully');
     } catch (error) {
-      console.error('Failed to export debug info:', error);
+      log.error('Failed to export debug info:', error);
       toast.error('Failed to export debug information');
     }
   };
@@ -771,7 +772,7 @@ export default function DebugTab() {
       document.body.removeChild(a);
       toast.success('Debug information exported as CSV');
     } catch (error) {
-      console.error('Failed to export CSV:', error);
+      log.error('Failed to export CSV:', error);
       toast.error('Failed to export debug information as CSV');
     }
   };
@@ -1098,7 +1099,7 @@ export default function DebugTab() {
       doc.save(`bolt-debug-info-${new Date().toISOString()}.pdf`);
       toast.success('Debug information exported as PDF');
     } catch (error) {
-      console.error('Failed to export PDF:', error);
+      log.error('Failed to export PDF:', error);
       toast.error('Failed to export debug information as PDF');
     }
   };
@@ -1133,7 +1134,7 @@ export default function DebugTab() {
       document.body.removeChild(a);
       toast.success('Debug information exported as text file');
     } catch (error) {
-      console.error('Failed to export text file:', error);
+      log.error('Failed to export text file:', error);
       toast.error('Failed to export debug information as text file');
     }
   };

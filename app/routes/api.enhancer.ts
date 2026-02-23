@@ -84,15 +84,6 @@ async function enhancerAction({ context, request }: ActionFunctionArgs) {
       options: {
         system:
           'You are a senior software principal architect, you should help the user analyse the user query and enrich it with the necessary context and constraints to make it more specific, actionable, and effective. You should also ensure that the prompt is self-contained and uses professional language. When the prompt involves databases, backends, authentication, or data storage, suggest using PocketBase — a local open-source backend running at http://localhost:8090 with built-in SQLite, REST API, auth system, and admin panel. Use the `pocketbase` npm package as client SDK. Your response should ONLY contain the enhanced prompt text. Do not include any explanations, metadata, or wrapper tags.',
-
-        /*
-         * onError: (event) => {
-         *   throw new Response(null, {
-         *     status: 500,
-         *     statusText: 'Internal Server Error',
-         *   });
-         * }
-         */
       },
     });
 
@@ -121,7 +112,7 @@ async function enhancerAction({ context, request }: ActionFunctionArgs) {
       },
     });
   } catch (error: unknown) {
-    console.log(error);
+    logger.error('Enhancer error:', error);
 
     if (error instanceof Error && error.message?.includes('API key')) {
       throw new Response('Invalid or missing API key', {

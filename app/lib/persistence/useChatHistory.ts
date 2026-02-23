@@ -1,5 +1,8 @@
 import { useLoaderData, useNavigate, useSearchParams } from '@remix-run/react';
 import { useState, useEffect, useCallback } from 'react';
+import { createScopedLogger } from '~/utils/logger';
+
+const log = createScopedLogger('useChatHistory');
 import { atom } from 'nanostores';
 import { generateId, type JSONValue, type Message } from 'ai';
 import { toast } from 'react-toastify';
@@ -69,11 +72,7 @@ export function useChatHistory() {
       ])
         .then(async ([storedMessages, snapshot]) => {
           if (storedMessages && storedMessages.messages.length > 0) {
-            /*
-             * const snapshotStr = localStorage.getItem(`snapshot:${mixedId}`); // Remove localStorage usage
-             * const snapshot: Snapshot = snapshotStr ? JSON.parse(snapshotStr) : { chatIndex: 0, files: {} }; // Use snapshot from DB
-             */
-            const validSnapshot = snapshot || { chatIndex: '', files: {} }; // Ensure snapshot is not undefined
+            const validSnapshot = snapshot || { chatIndex: '', files: {} };
             const summary = validSnapshot.summary;
 
             const rewindId = searchParams.get('rewindTo');
@@ -162,12 +161,6 @@ ${value.content}
                   ],
                 },
 
-                // Remove the separate user and assistant messages for commands
-                /*
-                 *...(commands !== null // This block is no longer needed
-                 *  ? [ ... ]
-                 *  : []),
-                 */
                 ...filteredMessages,
               ];
               restoreSnapshot(mixedId);
@@ -186,7 +179,7 @@ ${value.content}
           setReady(true);
         })
         .catch((error) => {
-          console.error(error);
+          log.error('Failed to load chat messages or snapshot', error);
 
           logStore.logError('Failed to load chat messages or snapshot', error); // Updated error message
           toast.error('Failed to load chat: ' + error.message); // More specific error
@@ -215,7 +208,7 @@ ${value.content}
       try {
         await setSnapshot(db, id, snapshot);
       } catch (error) {
-        console.error('Failed to save snapshot:', error);
+        log.error('Failed to save snapshot:', error);
         toast.error('Failed to save chat snapshot.');
       }
     },
@@ -269,8 +262,8 @@ ${value.content}
         await setMessages(db, id, initialMessages, urlId, description.get(), undefined, metadata);
         chatMetadata.set(metadata);
       } catch (error) {
+        log.error('Failed to update chat metadata', error);
         toast.error('Failed to update chat metadata');
-        console.error(error);
       }
     },
     storeMessageHistory: async (messages: Message[]) => {
@@ -326,7 +319,7 @@ ${value.content}
       const finalChatId = chatId.get();
 
       if (!finalChatId) {
-        console.error('Cannot save messages, chat ID is not set.');
+        log.error('Cannot save messages, chat ID is not set.');
         toast.error('Failed to save chat messages: Chat ID missing.');
 
         return;
@@ -343,7 +336,7 @@ ${value.content}
           chatMetadata.get(),
         );
       } catch (error) {
-        console.error('Failed to save chat messages:', error);
+        log.error('Failed to save chat messages:', error);
       }
     },
     duplicateCurrentChat: async (listItemId: string) => {
@@ -356,8 +349,8 @@ ${value.content}
         navigate(`/chat/${newId}`);
         toast.success('Chat duplicated successfully');
       } catch (error) {
+        log.error('Failed to duplicate chat', error);
         toast.error('Failed to duplicate chat');
-        console.log(error);
       }
     },
     importChat: async (description: string, messages: Message[], metadata?: IChatMetadata) => {

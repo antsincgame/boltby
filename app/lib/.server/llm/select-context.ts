@@ -21,7 +21,7 @@ export async function selectContext(props: {
   promptId?: string;
   contextOptimization?: boolean;
   summary: string;
-  onFinish?: (resp: GenerateTextResult<Record<string, CoreTool<any, any>>, never>) => void;
+  onFinish?: (resp: GenerateTextResult<Record<string, CoreTool<any, any>>, any>) => void;
 }) {
   const { messages, env: serverEnv, apiKeys, files, providerSettings, summary, onFinish } = props;
   let currentModel = DEFAULT_MODEL;
@@ -124,9 +124,12 @@ export async function selectContext(props: {
 
   const CONTEXT_TIMEOUT_MS = 45_000;
 
-  const resp = await Promise.race([
-    generateText({
-      system: `
+  let resp: GenerateTextResult<Record<string, CoreTool<any, any>>, any>;
+
+  try {
+    resp = await Promise.race([
+      generateText({
+        system: `
         You are a software engineer. You are working on a project. You have access to the following files:
 
         AVAILABLE FILES PATHS
@@ -158,7 +161,7 @@ export async function selectContext(props: {
         * You should not include any file that is already in the context buffer.
         * If no changes are needed, you can leave the response empty updateContextBuffer tag.
         `,
-      prompt: `
+        prompt: `
         ${summaryText}
 
         Users Question: ${extractTextContent(lastUserMessage)}
@@ -174,17 +177,21 @@ export async function selectContext(props: {
         * if the buffer is full, you need to exclude files that is not needed and include files that is relevent.
 
         `,
-      model: provider.getModelInstance({
-        model: currentModel,
-        serverEnv,
-        apiKeys,
-        providerSettings,
+        model: provider.getModelInstance({
+          model: currentModel,
+          serverEnv,
+          apiKeys,
+          providerSettings,
+        }),
       }),
-    }),
-    new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('Context selection timed out')), CONTEXT_TIMEOUT_MS),
-    ),
-  ]);
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Context selection timed out')), CONTEXT_TIMEOUT_MS),
+      ),
+    ]);
+  } catch (err) {
+    logger.warn(`selectContext: ${err instanceof Error ? err.message : String(err)} — returning current files`);
+    return files;
+  }
 
   const response = resp.text;
   const updateContextBuffer = response.match(/<updateContextBuffer>([\s\S]*?)<\/updateContextBuffer>/);

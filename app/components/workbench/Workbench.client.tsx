@@ -19,7 +19,9 @@ import { Slider, type SliderOptions } from '~/components/ui/Slider';
 import { workbenchStore, type WorkbenchViewType } from '~/lib/stores/workbench';
 import { classNames } from '~/utils/classNames';
 import { cubicEasingFn } from '~/utils/easings';
-import { renderLogger } from '~/utils/logger';
+import { createScopedLogger, renderLogger } from '~/utils/logger';
+
+const log = createScopedLogger('Workbench');
 import { EditorPanel } from './EditorPanel';
 import { Preview } from './Preview';
 import useViewport from '~/lib/hooks';
@@ -348,7 +350,7 @@ export const Workbench = memo(
         await workbenchStore.syncFiles(directoryHandle);
         toast.success('Files synced successfully');
       } catch (error) {
-        console.error('Error syncing files:', error);
+        log.error('Error syncing files:', error);
         toast.error('Failed to sync files');
       } finally {
         setIsSyncing(false);
@@ -499,7 +501,7 @@ export const Workbench = memo(
             onClose={() => setIsPushDialogOpen(false)}
             onPush={async (repoName, username, token, isPrivate) => {
               try {
-                console.log('Dialog onPush called with isPrivate =', isPrivate);
+                log.debug('Dialog onPush called with isPrivate =', isPrivate);
 
                 const commitMessage = prompt('Please enter a commit message:', 'Initial commit') || 'Initial commit';
                 const repoUrl = await workbenchStore.pushToGitHub(repoName, commitMessage, username, token, isPrivate);
@@ -513,7 +515,7 @@ export const Workbench = memo(
 
                 return repoUrl;
               } catch (error) {
-                console.error('Error pushing to GitHub:', error);
+                log.error('Error pushing to GitHub:', error);
                 toast.error('Failed to push to GitHub');
                 throw error;
               }

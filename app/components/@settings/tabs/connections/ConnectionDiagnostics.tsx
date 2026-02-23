@@ -5,6 +5,9 @@ import { Badge } from '~/components/ui/Badge';
 import { classNames } from '~/utils/classNames';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '~/components/ui/Collapsible';
 import { CodeBracketIcon, ChevronDownIcon } from '@heroicons/react/24/outline';
+import { createScopedLogger } from '~/utils/logger';
+
+const log = createScopedLogger('ConnectionDiagnostics');
 
 // Helper function to safely parse JSON
 const safeJsonParse = (item: string | null) => {
@@ -15,7 +18,7 @@ const safeJsonParse = (item: string | null) => {
   try {
     return JSON.parse(item);
   } catch (e) {
-    console.error('Failed to parse JSON from localStorage:', e);
+    log.error('Failed to parse JSON from localStorage:', e);
     return null;
   }
 };
@@ -58,7 +61,7 @@ export default function ConnectionDiagnostics() {
         ...(githubToken ? { Authorization: `Bearer ${githubToken}` } : {}),
         'Content-Type': 'application/json',
       };
-      console.log('Testing GitHub endpoints with token:', githubToken ? 'present' : 'missing');
+      log.debug('Testing GitHub endpoints with token:', githubToken ? 'present' : 'missing');
 
       const githubEndpoints = [
         { name: 'User', url: '/api/system/git-info?action=getUser' },
@@ -182,7 +185,7 @@ export default function ConnectionDiagnostics() {
         toast.info('No connection data found in browser storage.');
       }
     } catch (error) {
-      console.error('Diagnostics error:', error);
+      log.error('Diagnostics error:', error);
       toast.error('Error running diagnostics');
       setDiagnosticResults({ error: error instanceof Error ? error.message : String(error) });
     } finally {
@@ -200,7 +203,7 @@ export default function ConnectionDiagnostics() {
       toast.success('GitHub connection data cleared. Please refresh the page and reconnect.');
       setDiagnosticResults(null);
     } catch (error) {
-      console.error('Error clearing GitHub data:', error);
+      log.error('Error clearing GitHub data:', error);
       toast.error('Failed to clear GitHub connection data');
     }
   };
@@ -213,7 +216,7 @@ export default function ConnectionDiagnostics() {
       toast.success('Netlify connection data cleared. Please refresh the page and reconnect.');
       setDiagnosticResults(null);
     } catch (error) {
-      console.error('Error clearing Netlify data:', error);
+      log.error('Error clearing Netlify data:', error);
       toast.error('Failed to clear Netlify connection data');
     }
   };
@@ -225,7 +228,7 @@ export default function ConnectionDiagnostics() {
       toast.success('Vercel connection data cleared. Please refresh the page and reconnect.');
       setDiagnosticResults(null);
     } catch (error) {
-      console.error('Error clearing Vercel data:', error);
+      log.error('Error clearing Vercel data:', error);
       toast.error('Failed to clear Vercel connection data');
     }
   };
@@ -236,7 +239,7 @@ export default function ConnectionDiagnostics() {
       toast.success('PocketBase URL reset to default (localhost:8090).');
       setDiagnosticResults(null);
     } catch (error) {
-      console.error('Error clearing PocketBase data:', error);
+      log.error('Error clearing PocketBase data:', error);
       toast.error('Failed to reset PocketBase connection');
     }
   };
