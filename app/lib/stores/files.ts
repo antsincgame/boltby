@@ -9,10 +9,6 @@ import { computeFileModifications } from '~/utils/diff';
 import { createScopedLogger } from '~/utils/logger';
 import { unreachable } from '~/utils/unreachable';
 import {
-  addLockedFile,
-  removeLockedFile,
-  addLockedFolder,
-  removeLockedFolder,
   getLockedItemsForChat,
   getLockedFilesForChat,
   getLockedFoldersForChat,
@@ -21,6 +17,7 @@ import {
   clearCache,
 } from '~/lib/persistence/lockedFiles';
 import { getCurrentChatId } from '~/utils/fileLocks';
+import { FileLockService } from '~/lib/services/file-lock-service';
 
 const logger = createScopedLogger('FilesStore');
 
@@ -40,12 +37,13 @@ export interface Folder {
   lockedByFolder?: string; // Path of the folder that locked this folder (for nested folders)
 }
 
-type Dirent = File | Folder;
+export type Dirent = File | Folder;
 
 export type FileMap = Record<string, Dirent | undefined>;
 
 export class FilesStore {
   #webcontainer: Promise<WebContainer>;
+  #fileLockService: FileLockService;
 
   /**
    * Tracks the number of files without folders.
@@ -75,6 +73,17 @@ export class FilesStore {
 
   constructor(webcontainerPromise: Promise<WebContainer>) {
     this.#webcontainer = webcontainerPromise;
+    this.#fileLockService = new FileLockService({
+      getFile: (filePath) => this.getFile(filePath),
+      getFileOrFolder: (filePath) => this.getFileOrFolder(filePath),
+      getFiles: () => this.files.get(),
+      setFileKey: (path, value) => this.files.setKey(path, value),
+      setFiles: (value) => this.files.set(value),
+      applyLockToFolderContents: (files, updates, folderPath) =>
+        this.#applyLockToFolderContents(files, updates, folderPath),
+      logInfo: (message) => logger.info(message),
+      logError: (message) => logger.error(message),
+    });
 
     // Load deleted paths from localStorage if available
     try {
@@ -233,26 +242,7 @@ export class FilesStore {
    * @returns True if the file was successfully locked
    */
   lockFile(filePath: string, chatId?: string) {
-    const file = this.getFile(filePath);
-    const currentChatId = chatId || getCurrentChatId();
-
-    if (!file) {
-      logger.error(`Cannot lock non-existent file: ${filePath}`);
-      return false;
-    }
-
-    // Update the file in the store
-    this.files.setKey(filePath, {
-      ...file,
-      isLocked: true,
-    });
-
-    // Persist to localStorage with chat ID
-    addLockedFile(currentChatId, filePath);
-
-    logger.info(`File locked: ${filePath} for chat: ${currentChatId}`);
-
-    return true;
+    return this.#fileLockService.lockFile(filePath, chatId);
   }
 
   /**
@@ -262,35 +252,7 @@ export class FilesStore {
    * @returns True if the folder was successfully locked
    */
   lockFolder(folderPath: string, chatId?: string) {
-    const folder = this.getFileOrFolder(folderPath);
-    const currentFiles = this.files.get();
-    const currentChatId = chatId || getCurrentChatId();
-
-    if (!folder || folder.type !== 'folder') {
-      logger.error(`Cannot lock non-existent folder: ${folderPath}`);
-      return false;
-    }
-
-    const updates: FileMap = {};
-
-    // Update the folder in the store
-    updates[folderPath] = {
-      type: folder.type,
-      isLocked: true,
-    };
-
-    // Apply lock to all files within the folder
-    this.#applyLockToFolderContents(currentFiles, updates, folderPath);
-
-    // Update the store with all changes
-    this.files.set({ ...currentFiles, ...updates });
-
-    // Persist to localStorage with chat ID
-    addLockedFolder(currentChatId, folderPath);
-
-    logger.info(`Folder locked: ${folderPath} for chat: ${currentChatId}`);
-
-    return true;
+    return this.#fileLockService.lockFolder(folderPath, chatId);
   }
 
   /**
@@ -300,27 +262,7 @@ export class FilesStore {
    * @returns True if the file was successfully unlocked
    */
   unlockFile(filePath: string, chatId?: string) {
-    const file = this.getFile(filePath);
-    const currentChatId = chatId || getCurrentChatId();
-
-    if (!file) {
-      logger.error(`Cannot unlock non-existent file: ${filePath}`);
-      return false;
-    }
-
-    // Update the file in the store
-    this.files.setKey(filePath, {
-      ...file,
-      isLocked: false,
-      lockedByFolder: undefined, // Clear the parent folder lock reference if it exists
-    });
-
-    // Remove from localStorage with chat ID
-    removeLockedFile(currentChatId, filePath);
-
-    logger.info(`File unlocked: ${filePath} for chat: ${currentChatId}`);
-
-    return true;
+    return this.#fileLockService.unlockFile(filePath, chatId);
   }
 
   /**
@@ -330,53 +272,7 @@ export class FilesStore {
    * @returns True if the folder was successfully unlocked
    */
   unlockFolder(folderPath: string, chatId?: string) {
-    const folder = this.getFileOrFolder(folderPath);
-    const currentFiles = this.files.get();
-    const currentChatId = chatId || getCurrentChatId();
-
-    if (!folder || folder.type !== 'folder') {
-      logger.error(`Cannot unlock non-existent folder: ${folderPath}`);
-      return false;
-    }
-
-    const updates: FileMap = {};
-
-    // Update the folder in the store
-    updates[folderPath] = {
-      type: folder.type,
-      isLocked: false,
-    };
-
-    // Find all files that are within this folder and unlock them
-    const folderPrefix = folderPath.endsWith('/') ? folderPath : `${folderPath}/`;
-
-    Object.entries(currentFiles).forEach(([path, file]) => {
-      if (path.startsWith(folderPrefix) && file) {
-        if (file.type === 'file' && file.lockedByFolder === folderPath) {
-          updates[path] = {
-            ...file,
-            isLocked: false,
-            lockedByFolder: undefined,
-          };
-        } else if (file.type === 'folder' && file.lockedByFolder === folderPath) {
-          updates[path] = {
-            type: file.type,
-            isLocked: false,
-            lockedByFolder: undefined,
-          };
-        }
-      }
-    });
-
-    // Update the store with all changes
-    this.files.set({ ...currentFiles, ...updates });
-
-    // Remove from localStorage with chat ID
-    removeLockedFolder(currentChatId, folderPath);
-
-    logger.info(`Folder unlocked: ${folderPath} for chat: ${currentChatId}`);
-
-    return true;
+    return this.#fileLockService.unlockFolder(folderPath, chatId);
   }
 
   /**

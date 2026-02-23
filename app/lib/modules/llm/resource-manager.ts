@@ -88,7 +88,9 @@ class ResourceManager {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ model: loaded.name, messages: [], keep_alive: 0 }),
-        }).catch(() => {});
+        }).catch((err) => {
+          logger.debug('[UNLOAD] Ollama chat unload request failed:', err instanceof Error ? err.message : String(err));
+        });
         count++;
       }
 

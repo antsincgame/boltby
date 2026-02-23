@@ -582,7 +582,7 @@ export function fixTailwindOrPostcssConfig(content: string, filePath: string): s
       const requireLiteralDQ = `require("${pkg}")`;
 
       if (fixed.includes(requireLiteral) || fixed.includes(requireLiteralDQ)) {
-        const safeRequire = `(() => { try { return require('${pkg}'); } catch { return () => ({}); } })()`;
+        const safeRequire = `(() => { try { return require('${pkg}'); } catch (e) { console.warn('[tailwind plugin missing]', '${pkg}'); return () => ({}); } })()`;
         fixed = fixed.replace(
           new RegExp(`require\\s*\\(\\s*['"]${pkg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}['"]\\s*\\)`, 'g'),
           safeRequire,

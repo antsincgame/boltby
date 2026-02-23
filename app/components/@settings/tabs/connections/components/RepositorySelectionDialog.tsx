@@ -1,4 +1,5 @@
 import type { GitHubRepoInfo, GitHubContent, RepositoryStats, GitHubUserResponse } from '~/types/GitHub';
+import type { GitHubConnectionStorage } from '~/types/storage';
 import { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import * as Dialog from '@radix-ui/react-dialog';
@@ -67,7 +68,7 @@ export function RepositorySelectionDialog({ isOpen, onClose, onSelect }: Reposit
 
   // Initialize GitHub connection and fetch repositories
   useEffect(() => {
-    const savedConnection = getLocalStorage<{ user?: { login?: string }; token?: string }>('github_connection');
+    const savedConnection = getLocalStorage<GitHubConnectionStorage>('github_connection');
 
     // If no connection exists but environment variables are set, create a connection
     if (!savedConnection && import.meta.env.VITE_GITHUB_ACCESS_TOKEN) {
@@ -129,7 +130,7 @@ export function RepositorySelectionDialog({ isOpen, onClose, onSelect }: Reposit
   }, [isOpen, activeTab]);
 
   const fetchUserRepos = async () => {
-    const connection = getLocalStorage<{ user?: { login?: string }; token?: string }>('github_connection');
+    const connection = getLocalStorage<GitHubConnectionStorage>('github_connection');
 
     if (!connection?.token) {
       toast.error('Please connect your GitHub account first');
@@ -221,7 +222,7 @@ export function RepositorySelectionDialog({ isOpen, onClose, onSelect }: Reposit
     setIsLoading(true);
 
     try {
-      const connection = getLocalStorage<{ user?: { login?: string }; token?: string }>('github_connection');
+      const connection = getLocalStorage<GitHubConnectionStorage>('github_connection');
       const headers: HeadersInit = connection?.token
         ? {
             Accept: 'application/vnd.github.v3+json',
@@ -289,7 +290,7 @@ export function RepositorySelectionDialog({ isOpen, onClose, onSelect }: Reposit
         .slice(-2);
 
       // Try to get token from local storage first
-      const connection = getLocalStorage<{ user?: { login?: string }; token?: string }>('github_connection');
+      const connection = getLocalStorage<GitHubConnectionStorage>('github_connection');
 
       // If no connection in local storage, check environment variables
       let headers: HeadersInit = {};
