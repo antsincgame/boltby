@@ -1,5 +1,8 @@
 import { useState, useCallback } from 'react';
 import { useStore } from '@nanostores/react';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('ProfileTab');
 import { classNames } from '~/utils/classNames';
 import { profileStore, updateProfile } from '~/lib/stores/profile';
 import { toast } from 'react-toastify';
@@ -39,13 +42,13 @@ export default function ProfileTab() {
       };
 
       reader.onerror = () => {
-        console.error('Error reading file:', reader.error);
+        logger.error('Error reading file:', reader.error);
         setIsUploading(false);
         toast.error('Failed to update profile picture');
       };
       reader.readAsDataURL(file);
     } catch (error) {
-      console.error('Error uploading avatar:', error);
+      logger.error('Error uploading avatar:', error);
       setIsUploading(false);
       toast.error('Failed to update profile picture');
     }

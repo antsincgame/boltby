@@ -1,5 +1,8 @@
 import { type ActionFunctionArgs, type LoaderFunctionArgs, json } from '@remix-run/cloudflare';
 import type { VercelProjectInfo } from '~/types/vercel';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('VercelDeploy');
 
 // Add loader function to handle GET requests
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -55,7 +58,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         : null,
     });
   } catch (error) {
-    console.error('Error fetching Vercel deployment:', error);
+    logger.error('Error fetching Vercel deployment:', error);
     return json({ error: 'Failed to fetch deployment' }, { status: 500 });
   }
 }
@@ -244,7 +247,7 @@ export async function action({ request }: ActionFunctionArgs) {
       project: projectInfo,
     });
   } catch (error) {
-    console.error('Vercel deploy error:', error);
+    logger.error('Vercel deploy error:', error);
     return json({ error: 'Deployment failed' }, { status: 500 });
   }
 }

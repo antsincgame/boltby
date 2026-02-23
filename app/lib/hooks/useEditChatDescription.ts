@@ -8,6 +8,9 @@ import {
   getMessages,
   updateChatDescription,
 } from '~/lib/persistence';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('EditChatDescription');
 
 interface EditChatDescriptionOptions {
   initialDescription?: string;
@@ -72,7 +75,7 @@ export function useEditChatDescription({
       const chat = await getMessages(db, chatId);
       return chat?.description || initialDescription;
     } catch (error) {
-      console.error('Failed to fetch latest description:', error);
+      logger.error('Failed to fetch latest description:', error);
       return initialDescription;
     }
   }, [db, chatId, initialDescription]);

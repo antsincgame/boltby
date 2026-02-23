@@ -1,6 +1,9 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useStore } from '@nanostores/react';
 import { IconButton } from '~/components/ui/IconButton';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('Preview');
 import { workbenchStore } from '~/lib/stores/workbench';
 import { PortDropdown } from './PortDropdown';
 import { ScreenshotSelector } from './ScreenshotSelector';
@@ -406,7 +409,7 @@ export const Preview = memo(() => {
           );
 
           if (!newWindow) {
-            console.error('Failed to open new window');
+            logger.error('Failed to open new window');
             return;
           }
 
@@ -543,7 +546,7 @@ export const Preview = memo(() => {
           }
         }
       } else {
-        console.warn('[Preview] Invalid WebContainer URL:', activePreview.baseUrl);
+        logger.warn('[Preview] Invalid WebContainer URL:', activePreview.baseUrl);
       }
     }
   };
@@ -733,7 +736,7 @@ export const Preview = memo(() => {
                         className={`flex w-full justify-between items-center text-start bg-transparent text-xs text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary`}
                         onClick={() => {
                           if (!activePreview?.baseUrl) {
-                            console.warn('[Preview] No active preview available');
+                            logger.warn('[Preview] No active preview available');
                             return;
                           }
 
@@ -742,7 +745,7 @@ export const Preview = memo(() => {
                           );
 
                           if (!match) {
-                            console.warn('[Preview] Invalid WebContainer URL:', activePreview.baseUrl);
+                            logger.warn('[Preview] Invalid WebContainer URL:', activePreview.baseUrl);
                             return;
                           }
 

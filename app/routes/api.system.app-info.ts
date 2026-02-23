@@ -1,5 +1,8 @@
 import type { ActionFunctionArgs, LoaderFunction } from '@remix-run/cloudflare';
 import { json } from '@remix-run/cloudflare';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('AppInfoAPI');
 
 // These are injected by Vite at build time
 declare const __APP_VERSION: string;
@@ -68,7 +71,7 @@ export const loader: LoaderFunction = async ({ request: _request }) => {
   try {
     return json(getAppResponse());
   } catch (error) {
-    console.error('Failed to get webapp info:', error);
+    logger.error('Failed to get webapp info:', error);
     return json(
       {
         name: 'bolt.diy',
@@ -103,7 +106,7 @@ export const action = async ({ request: _request }: ActionFunctionArgs) => {
   try {
     return json(getAppResponse());
   } catch (error) {
-    console.error('Failed to get webapp info:', error);
+    logger.error('Failed to get webapp info:', error);
     return json(
       {
         name: 'bolt.diy',

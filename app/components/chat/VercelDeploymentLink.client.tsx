@@ -1,5 +1,8 @@
 import { useStore } from '@nanostores/react';
 import { vercelConnection } from '~/lib/stores/vercel';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('VercelDeploy');
 import { chatId } from '~/lib/persistence/useChatHistory';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { useEffect, useState } from 'react';
@@ -114,7 +117,7 @@ export function VercelDeploymentLink() {
           setDeploymentUrl((data as { project: { url: string } }).project.url);
         }
       } catch (err) {
-        console.error('Error fetching Vercel deployment:', err);
+        logger.error('Error fetching Vercel deployment:', err);
       } finally {
         setIsLoading(false);
       }

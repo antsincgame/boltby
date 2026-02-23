@@ -64,7 +64,31 @@ export default class OllamaProvider extends BaseProvider {
     baseUrlKey: 'OLLAMA_API_BASE_URL',
   };
 
-  staticModels: ModelInfo[] = [];
+  staticModels: ModelInfo[] = [
+    {
+      name: 'qwen2.5-coder:14b-instruct',
+      label: 'Qwen 2.5 Coder 14B Instruct',
+      provider: 'Ollama',
+      maxTokenAllowed: 16384,
+    },
+    {
+      name: 'qwen2.5-coder:7b-instruct',
+      label: 'Qwen 2.5 Coder 7B Instruct',
+      provider: 'Ollama',
+      maxTokenAllowed: 24576,
+    },
+    {
+      name: 'qwen3-coder:30b-a3b-q4_K_M',
+      label: 'Qwen3 Coder 30B MoE (3B active)',
+      provider: 'Ollama',
+      maxTokenAllowed: 32768,
+    },
+    { name: 'devstral:24b', label: 'Devstral 24B (Mistral Code)', provider: 'Ollama', maxTokenAllowed: 12288 },
+    { name: 'deepseek-coder-v2:16b', label: 'DeepSeek Coder V2 16B', provider: 'Ollama', maxTokenAllowed: 16384 },
+    { name: 'deepseek-r1:14b', label: 'DeepSeek R1 14B (Reasoning)', provider: 'Ollama', maxTokenAllowed: 16384 },
+    { name: 'deepseek-r1:8b', label: 'DeepSeek R1 8B (Reasoning)', provider: 'Ollama', maxTokenAllowed: 24576 },
+    { name: 'qwen3:8b-q4_K_M', label: 'Qwen3 8B', provider: 'Ollama', maxTokenAllowed: 32768 },
+  ];
 
   private _modelSizeMap = new Map<string, number>();
 

@@ -30,7 +30,28 @@ export default class LMStudioProvider extends BaseProvider {
     baseUrl: 'http://localhost:1234/',
   };
 
-  staticModels: ModelInfo[] = [];
+  staticModels: ModelInfo[] = [
+    { name: 'qwen2.5-coder-7b-instruct', label: 'Qwen2.5 Coder 7B', provider: 'LMStudio', maxTokenAllowed: 32768 },
+    { name: 'qwen/qwen3-8b', label: 'Qwen3 8B', provider: 'LMStudio', maxTokenAllowed: 32768 },
+    { name: 'codegemma-1.1-7b-it', label: 'CodeGemma 1.1 7B', provider: 'LMStudio', maxTokenAllowed: 8192 },
+    {
+      name: 'deepseek/deepseek-r1-0528-qwen3-8b',
+      label: 'DeepSeek R1 Qwen3 8B',
+      provider: 'LMStudio',
+      maxTokenAllowed: 32768,
+    },
+    { name: 'exaone-3.5-7.8b-instruct', label: 'EXAONE 3.5 7.8B', provider: 'LMStudio', maxTokenAllowed: 32768 },
+    { name: 'google/gemma-3-4b', label: 'Gemma 3 4B', provider: 'LMStudio', maxTokenAllowed: 32768 },
+    { name: 'openai/gpt-oss-20b', label: 'GPT-OSS 20B', provider: 'LMStudio', maxTokenAllowed: 32768 },
+    { name: 'qwen/qwen3-vl-8b', label: 'Qwen3 VL 8B (Vision)', provider: 'LMStudio', maxTokenAllowed: 32768 },
+    {
+      name: 'nvidia-nemotron-nano-9b-v2-base',
+      label: 'Nemotron Nano 9B',
+      provider: 'LMStudio',
+      maxTokenAllowed: 32768,
+    },
+    { name: 'phi-3.5-mini-instruct', label: 'Phi 3.5 Mini', provider: 'LMStudio', maxTokenAllowed: 16384 },
+  ];
 
   private _resolveBaseUrl(
     apiKeys?: Record<string, string>,
@@ -118,8 +139,11 @@ export default class LMStudioProvider extends BaseProvider {
       for (const m of models) {
         await this._ensureContext(baseUrl, m);
       }
-    } catch {
-      // fallback to standard OpenAI endpoint
+    } catch (err) {
+      logger.debug(
+        'LMStudio extended API unavailable, falling back to OpenAI endpoint:',
+        err instanceof Error ? err.message : String(err),
+      );
     }
 
     if (models.length > 0) {

@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react';
 import { getDebugStatus, acknowledgeWarning, acknowledgeError, type DebugIssue } from '~/lib/api/debug';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('DebugStatus');
 
 const ACKNOWLEDGED_DEBUG_ISSUES_KEY = 'bolt_acknowledged_debug_issues';
 
@@ -16,7 +19,7 @@ const setAcknowledgedIssues = (issueIds: string[]) => {
   try {
     localStorage.setItem(ACKNOWLEDGED_DEBUG_ISSUES_KEY, JSON.stringify(issueIds));
   } catch (error) {
-    console.error('Failed to persist acknowledged debug issues:', error);
+    logger.error('Failed to persist acknowledged debug issues:', error);
   }
 };
 
@@ -36,7 +39,7 @@ export const useDebugStatus = () => {
       setActiveIssues(issues);
       setHasActiveWarnings(issues.length > 0);
     } catch (error) {
-      console.error('Failed to check debug status:', error);
+      logger.error('Failed to check debug status:', error);
     }
   };
 
@@ -63,7 +66,7 @@ export const useDebugStatus = () => {
       setActiveIssues((prev) => prev.filter((i) => i.id !== issue.id));
       setHasActiveWarnings(activeIssues.length > 1);
     } catch (error) {
-      console.error('Failed to acknowledge issue:', error);
+      logger.error('Failed to acknowledge issue:', error);
     }
   };
 
@@ -81,7 +84,7 @@ export const useDebugStatus = () => {
       setActiveIssues([]);
       setHasActiveWarnings(false);
     } catch (error) {
-      console.error('Failed to acknowledge all issues:', error);
+      logger.error('Failed to acknowledge all issues:', error);
     }
   };
 

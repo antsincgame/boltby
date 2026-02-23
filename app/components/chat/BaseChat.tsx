@@ -1,7 +1,3 @@
-/*
- * @ts-nocheck
- * Preventing TS checks with files presented in the video for a better presentation.
- */
 import type { JSONValue, Message } from 'ai';
 import React, { type RefCallback, useEffect, useState } from 'react';
 import { ClientOnly } from 'remix-utils/client-only';
@@ -41,7 +37,9 @@ import { ExpoQrModal } from '~/components/workbench/ExpoQrModal';
 import { expoUrlAtom } from '~/lib/stores/qrCodeStore';
 import { useStore } from '@nanostores/react';
 import { StickToBottom, useStickToBottomContext } from '~/lib/hooks';
+import { createScopedLogger } from '~/utils/logger';
 
+const logger = createScopedLogger('BaseChat');
 const TEXTAREA_MIN_HEIGHT = 76;
 
 interface BaseChatProps {
@@ -176,7 +174,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
         };
 
         recognition.onerror = (event) => {
-          console.error('Speech recognition error:', event.error);
+          logger.error('Speech recognition error:', event.error);
           setIsListening(false);
         };
 
@@ -192,7 +190,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
           parsedApiKeys = getApiKeysFromCookies();
           setApiKeys(parsedApiKeys);
         } catch (error) {
-          console.error('Error loading API keys from cookies:', error);
+          logger.error('Error loading API keys from cookies:', error);
           Cookies.remove('apiKeys');
         }
 
@@ -204,7 +202,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
             setModelList(typedData.modelList);
           })
           .catch((error) => {
-            console.error('Error fetching model list:', error);
+            logger.error('Error fetching model list:', error);
           })
           .finally(() => {
             setIsModelLoading(undefined);
@@ -226,7 +224,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
         const data = await response.json();
         providerModels = (data as { modelList: ModelInfo[] }).modelList;
       } catch (error) {
-        console.error('Error loading dynamic models for:', providerName, error);
+        logger.error('Error loading dynamic models for:', providerName, error);
       }
 
       // Only update models for the specific provider

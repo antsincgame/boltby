@@ -13,6 +13,9 @@ import { Input, SearchInput, Badge, FilterChip } from '~/components/ui';
 // Import the components we've extracted
 import { RepositoryList } from './RepositoryList';
 import { StatsDialog } from './StatsDialog';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('RepoSelection');
 import { GitHubAuthDialog } from './GitHubAuthDialog';
 import { RepositoryDialogContext } from './RepositoryDialogContext';
 
@@ -64,7 +67,7 @@ export function RepositorySelectionDialog({ isOpen, onClose, onSelect }: Reposit
 
   // Initialize GitHub connection and fetch repositories
   useEffect(() => {
-    const savedConnection = getLocalStorage('github_connection');
+    const savedConnection = getLocalStorage<{ user?: { login?: string }; token?: string }>('github_connection');
 
     // If no connection exists but environment variables are set, create a connection
     if (!savedConnection && import.meta.env.VITE_GITHUB_ACCESS_TOKEN) {
@@ -113,7 +116,7 @@ export function RepositorySelectionDialog({ isOpen, onClose, onSelect }: Reposit
           }
         })
         .catch((error) => {
-          console.error('Failed to initialize GitHub connection from environment variables:', error);
+          logger.error('Failed to initialize GitHub connection from environment variables:', error);
         });
     }
   }, [isOpen]);
@@ -126,7 +129,7 @@ export function RepositorySelectionDialog({ isOpen, onClose, onSelect }: Reposit
   }, [isOpen, activeTab]);
 
   const fetchUserRepos = async () => {
-    const connection = getLocalStorage('github_connection');
+    const connection = getLocalStorage<{ user?: { login?: string }; token?: string }>('github_connection');
 
     if (!connection?.token) {
       toast.error('Please connect your GitHub account first');
@@ -159,7 +162,7 @@ export function RepositorySelectionDialog({ isOpen, onClose, onSelect }: Reposit
         throw new Error('Invalid repository data format');
       }
     } catch (error) {
-      console.error('Error fetching repos:', error);
+      logger.error('Error fetching repos:', error);
       toast.error('Failed to fetch your repositories');
     } finally {
       setIsLoading(false);
@@ -207,7 +210,7 @@ export function RepositorySelectionDialog({ isOpen, onClose, onSelect }: Reposit
         throw new Error('Invalid search results format');
       }
     } catch (error) {
-      console.error('Error searching repos:', error);
+      logger.error('Error searching repos:', error);
       toast.error('Failed to search repositories');
     } finally {
       setIsLoading(false);
@@ -218,7 +221,7 @@ export function RepositorySelectionDialog({ isOpen, onClose, onSelect }: Reposit
     setIsLoading(true);
 
     try {
-      const connection = getLocalStorage('github_connection');
+      const connection = getLocalStorage<{ user?: { login?: string }; token?: string }>('github_connection');
       const headers: HeadersInit = connection?.token
         ? {
             Accept: 'application/vnd.github.v3+json',
@@ -247,7 +250,7 @@ export function RepositorySelectionDialog({ isOpen, onClose, onSelect }: Reposit
         throw new Error('Invalid branch data format');
       }
     } catch (error) {
-      console.error('Error fetching branches:', error);
+      logger.error('Error fetching branches:', error);
       toast.error('Failed to fetch branches');
     } finally {
       setIsLoading(false);
@@ -286,7 +289,7 @@ export function RepositorySelectionDialog({ isOpen, onClose, onSelect }: Reposit
         .slice(-2);
 
       // Try to get token from local storage first
-      const connection = getLocalStorage('github_connection');
+      const connection = getLocalStorage<{ user?: { login?: string }; token?: string }>('github_connection');
 
       // If no connection in local storage, check environment variables
       let headers: HeadersInit = {};
@@ -419,7 +422,7 @@ export function RepositorySelectionDialog({ isOpen, onClose, onSelect }: Reposit
 
       return stats;
     } catch (error) {
-      console.error('Error verifying repository:', error);
+      logger.error('Error verifying repository:', error);
 
       // Check if it's an authentication error and show the auth dialog
       const errorMessage = error instanceof Error ? error.message : 'Failed to verify repository';
@@ -470,7 +473,7 @@ export function RepositorySelectionDialog({ isOpen, onClose, onSelect }: Reposit
       setPendingGitUrl(gitUrl);
       setShowStatsDialog(true);
     } catch (error) {
-      console.error('Error preparing repository:', error);
+      logger.error('Error preparing repository:', error);
 
       // Check if it's an authentication error
       const errorMessage = error instanceof Error ? error.message : 'Failed to prepare repository. Please try again.';

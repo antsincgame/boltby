@@ -1,5 +1,8 @@
 import { json } from '@remix-run/cloudflare';
 import JSZip from 'jszip';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('GitHubTemplate');
 
 export async function loader({ request }: { request: Request }) {
   const url = new URL(request.url);
@@ -90,7 +93,7 @@ export async function loader({ request }: { request: Request }) {
 
     return json(fileList);
   } catch (error) {
-    console.error('Error processing GitHub template:', error);
+    logger.error('Error processing GitHub template:', error);
     return json({ error: 'Failed to fetch template files' }, { status: 500 });
   }
 }

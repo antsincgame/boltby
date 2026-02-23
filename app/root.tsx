@@ -95,12 +95,13 @@ export default function App() {
   const theme = useStore(themeStore);
 
   useEffect(() => {
-    logStore.logSystem('Application initialized', {
-      theme,
-      platform: navigator.platform,
-      userAgent: navigator.userAgent,
-      timestamp: new Date().toISOString(),
-    });
+    if (!sessionStorage.getItem('bolt_init_logged')) {
+      logStore.logSystem('Application initialized', {
+        theme,
+        platform: navigator.platform,
+      });
+      sessionStorage.setItem('bolt_init_logged', '1');
+    }
   }, []);
 
   return (

@@ -205,7 +205,7 @@ ${lockedFilesListString}
   );
   const SAFETY_MARGIN = 500;
   const usedTokens = systemPromptTokens + messageTokens + SAFETY_MARGIN;
-  const availableForOutput = Math.max(4096, dynamicMaxTokens - usedTokens);
+  const availableForOutput = Math.max(8192, dynamicMaxTokens - usedTokens);
 
   logger.info(
     `Token budget: ctx=${dynamicMaxTokens}, prompt=${systemPromptTokens}, msgs=${messageTokens}, output=${availableForOutput}`,

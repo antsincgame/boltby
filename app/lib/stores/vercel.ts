@@ -1,6 +1,9 @@
 import { atom } from 'nanostores';
 import type { VercelConnection } from '~/types/vercel';
+import { createScopedLogger } from '~/utils/logger';
 import { logStore } from './logs';
+
+const logger = createScopedLogger('Vercel');
 import { toast } from 'react-toastify';
 
 // Initialize with stored connection or defaults
@@ -70,7 +73,7 @@ export async function fetchVercelStats(token: string) {
 
           return project;
         } catch (error) {
-          console.error(`Error fetching deployments for project ${project.id}:`, error);
+          logger.error(`Error fetching deployments for project ${project.id}:`, error);
           return project;
         }
       }),
@@ -85,7 +88,7 @@ export async function fetchVercelStats(token: string) {
       },
     });
   } catch (error) {
-    console.error('Vercel API Error:', error);
+    logger.error('Vercel API Error:', error);
     logStore.logError('Failed to fetch Vercel stats', { error });
     toast.error('Failed to fetch Vercel statistics');
   } finally {

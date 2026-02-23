@@ -55,7 +55,7 @@ export function PushToGitHubDialog({ isOpen, onClose, onPush }: PushToGitHubDial
   // Load GitHub connection on mount
   useEffect(() => {
     if (isOpen) {
-      const connection = getLocalStorage('github_connection');
+      const connection = getLocalStorage<{ user?: GitHubUserResponse; token?: string }>('github_connection');
 
       if (connection?.user && connection?.token) {
         setUser(connection.user);
@@ -136,7 +136,7 @@ export function PushToGitHubDialog({ isOpen, onClose, onPush }: PushToGitHubDial
             toast.error('GitHub token expired. Please reconnect your account.');
 
             // Clear invalid token
-            const connection = getLocalStorage('github_connection');
+            const connection = getLocalStorage<{ user?: GitHubUserResponse; token?: string }>('github_connection');
 
             if (connection) {
               localStorage.removeItem('github_connection');
@@ -190,7 +190,7 @@ export function PushToGitHubDialog({ isOpen, onClose, onPush }: PushToGitHubDial
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
-    const connection = getLocalStorage('github_connection');
+    const connection = getLocalStorage<{ user?: GitHubUserResponse; token?: string }>('github_connection');
 
     if (!connection?.token || !connection?.user) {
       toast.error('Please connect your GitHub account in Settings > Connections first');

@@ -420,8 +420,8 @@ export default function DebugTab() {
           loadTime = timing.loadEventEnd - timing.navigationStart;
           domReadyTime = timing.domContentLoadedEventEnd - timing.navigationStart;
         }
-      } catch {
-        // Fall back to older API if Navigation Timing API Level 2 is not available
+      } catch (err) {
+        console.debug('Navigation Timing API Level 2 unavailable, using fallback:', err);
         loadTime = timing.loadEventEnd - timing.navigationStart;
         domReadyTime = timing.domContentLoadedEventEnd - timing.navigationStart;
       }

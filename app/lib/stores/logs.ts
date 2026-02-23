@@ -34,12 +34,12 @@ export interface LogEntry {
     action?: string;
     userId?: string;
     sessionId?: string;
-    previousValue?: any;
-    newValue?: any;
+    previousValue?: unknown;
+    newValue?: unknown;
   };
 }
 
-interface LogDetails extends Record<string, any> {
+interface LogDetails extends Record<string, unknown> {
   type: string;
   message: string;
 }
@@ -161,8 +161,8 @@ class LogStore {
       url: string;
       statusCode: number;
       duration: number;
-      request: any;
-      response: any;
+      request: unknown;
+      response: unknown;
     },
   ) {
     const statusCode = details.statusCode;
@@ -314,8 +314,8 @@ class LogStore {
     endpoint: string,
     statusCode: number,
     duration: number,
-    requestData?: any,
-    responseData?: any,
+    requestData?: unknown,
+    responseData?: unknown,
   ) {
     return this._addLog(
       `API ${method} ${endpoint}`,
@@ -342,8 +342,8 @@ class LogStore {
     url: string,
     statusCode: number,
     duration: number,
-    requestData?: any,
-    responseData?: any,
+    requestData?: unknown,
+    responseData?: unknown,
   ) {
     return this._addLog(
       `${method} ${url}`,
@@ -437,14 +437,14 @@ class LogStore {
       url: string;
       statusCode: number;
       duration: number;
-      request: any;
-      response: any;
+      request: unknown;
+      response: unknown;
     },
   ) {
     return this._addApiLog(`API ${method} ${url}`, method, url, details);
   }
 
-  logSettingsChange(component: string, setting: string, oldValue: any, newValue: any) {
+  logSettingsChange(component: string, setting: string, oldValue: unknown, newValue: unknown) {
     return this._addLog(
       `Settings changed in ${component}: ${setting}`,
       'info',
@@ -476,7 +476,7 @@ class LogStore {
     );
   }
 
-  logTaskOperation(taskId: string, operation: string, status: string, details?: any) {
+  logTaskOperation(taskId: string, operation: string, status: string, details?: Record<string, unknown>) {
     return this._addLog(
       `Task ${taskId}: ${operation} - ${status}`,
       'info',
@@ -489,7 +489,7 @@ class LogStore {
     );
   }
 
-  logProviderAction(provider: string, action: string, success: boolean, details?: any) {
+  logProviderAction(provider: string, action: string, success: boolean, details?: Record<string, unknown>) {
     return this._addLog(
       `Provider ${provider}: ${action} - ${success ? 'Success' : 'Failed'}`,
       success ? 'info' : 'error',
@@ -502,7 +502,7 @@ class LogStore {
     );
   }
 
-  logPerformanceMetric(component: string, operation: string, duration: number, details?: any) {
+  logPerformanceMetric(component: string, operation: string, duration: number, details?: Record<string, unknown>) {
     return this._addLog(
       `Performance: ${component} - ${operation} took ${duration}ms`,
       duration > 1000 ? 'warning' : 'info',

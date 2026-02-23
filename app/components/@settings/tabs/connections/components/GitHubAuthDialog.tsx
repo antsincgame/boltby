@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('GitHubAuth');
 import { motion } from 'framer-motion';
 import { toast } from 'react-toastify';
 import Cookies from 'js-cookie';
@@ -65,7 +68,7 @@ export function GitHubAuthDialog({ isOpen, onClose }: GitHubAuthDialogProps) {
         }
       }
     } catch (error) {
-      console.error('Error connecting to GitHub:', error);
+      logger.error('Error connecting to GitHub:', error);
       toast.error('Failed to connect to GitHub. Please try again.');
     } finally {
       setIsSubmitting(false);

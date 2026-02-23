@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('NetlifyConnection');
 import { classNames } from '~/utils/classNames';
 import { useStore } from '@nanostores/react';
 import { netlifyConnection, updateNetlifyConnection, initializeNetlifyConnection } from '~/lib/stores/netlify';
@@ -192,7 +195,7 @@ export default function NetlifyConnection() {
       // Fetch stats after successful connection
       fetchNetlifyStats(tokenInput);
     } catch (error) {
-      console.error('Error connecting to Netlify:', error);
+      logger.error('Error connecting to Netlify:', error);
       toast.error(`Failed to connect to Netlify: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsConnecting(false);
@@ -283,7 +286,7 @@ export default function NetlifyConnection() {
 
       toast.success('Netlify stats updated');
     } catch (error) {
-      console.error('Error fetching Netlify stats:', error);
+      logger.error('Error fetching Netlify stats:', error);
       toast.error(`Failed to fetch Netlify stats: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setFetchingStats(false);

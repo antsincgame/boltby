@@ -81,8 +81,14 @@ class ResourceManager {
         await fetch(`${baseUrl}/api/generate`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ model: loaded.name, keep_alive: 0 }),
+          body: JSON.stringify({ model: loaded.name, prompt: '', keep_alive: 0, options: { num_predict: 0 } }),
         });
+
+        await fetch(`${baseUrl}/api/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model: loaded.name, messages: [], keep_alive: 0 }),
+        }).catch(() => {});
         count++;
       }
 
@@ -120,7 +126,11 @@ class ResourceManager {
         logger.debug(
           `[WAIT] Ollama: ${stillLoaded.length} model(s) still in VRAM (${((Date.now() - start) / 1000).toFixed(1)}s)`,
         );
-      } catch {
+      } catch (err) {
+        logger.debug(
+          '[WAIT] Ollama unreachable during poll, assuming unloaded:',
+          err instanceof Error ? err.message : String(err),
+        );
         return true;
       }
 
@@ -194,7 +204,11 @@ class ResourceManager {
         logger.debug(
           `[WAIT] LMStudio: ${stillLoaded.length} model(s) still in VRAM (${((Date.now() - start) / 1000).toFixed(1)}s)`,
         );
-      } catch {
+      } catch (err) {
+        logger.debug(
+          '[WAIT] LMStudio unreachable during poll, assuming unloaded:',
+          err instanceof Error ? err.message : String(err),
+        );
         return true;
       }
 
@@ -219,8 +233,8 @@ class ResourceManager {
 
           return true;
         }
-      } catch {
-        /* retry */
+      } catch (err) {
+        logger.debug(`[WAIT] LMStudio model poll retry: ${err instanceof Error ? err.message : String(err)}`);
       }
 
       await sleep(1000);
@@ -480,6 +494,22 @@ class ResourceManager {
 
     this._activeProvider = null;
     this._activeModel = null;
+  }
+
+  async forceUnloadAll(): Promise<{ ollama: number; lmstudio: number }> {
+    logger.info(`========== FORCE UNLOAD ALL ==========`);
+    logger.info(`[FORCE] Unloading all models from Ollama and LM Studio`);
+
+    const ollamaFreed = await this._unloadAllOllama(this._getOllamaUrl());
+    const lmsFreed = await this._unloadAllLMStudio(this._getLMStudioUrl());
+
+    logger.info(`[DONE] Force-freed ${ollamaFreed + lmsFreed} model(s) total`);
+    logger.info(`======================================`);
+
+    this._activeProvider = null;
+    this._activeModel = null;
+
+    return { ollama: ollamaFreed, lmstudio: lmsFreed };
   }
 
   resetTracking(): void {

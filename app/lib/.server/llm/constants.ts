@@ -2,7 +2,7 @@
 export const MAX_TOKENS = 12000;
 
 // Max continuation segments when LLM hits token limit mid-response
-export const MAX_RESPONSE_SEGMENTS = 5;
+export const MAX_RESPONSE_SEGMENTS = 8;
 
 export interface File {
   type: 'file';

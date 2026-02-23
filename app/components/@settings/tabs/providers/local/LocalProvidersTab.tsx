@@ -12,6 +12,9 @@ import { BiChip } from 'react-icons/bi';
 import { TbBrandOpenai } from 'react-icons/tb';
 import { providerBaseUrlEnvKeys } from '~/utils/constants';
 import { useToast } from '~/components/ui/use-toast';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('LocalProviders');
 import { Progress } from '~/components/ui/Progress';
 import OllamaModelInstaller from './OllamaModelInstaller';
 
@@ -77,6 +80,7 @@ export default function LocalProvidersTab() {
   const [categoryEnabled, setCategoryEnabled] = useState(false);
   const [ollamaModels, setOllamaModels] = useState<OllamaModel[]>([]);
   const [isLoadingModels, setIsLoadingModels] = useState(false);
+  const [isUnloading, setIsUnloading] = useState(false);
   const [editingProvider, setEditingProvider] = useState<string | null>(null);
   const { toast } = useToast();
 
@@ -163,7 +167,7 @@ export default function LocalProvidersTab() {
         })),
       );
     } catch (error) {
-      console.error('Error fetching Ollama models:', error);
+      logger.error('Error fetching Ollama models:', error);
     } finally {
       setIsLoadingModels(false);
     }
@@ -201,7 +205,7 @@ export default function LocalProvidersTab() {
           const rawData = JSON.parse(line);
 
           if (!isOllamaPullResponse(rawData)) {
-            console.error('Invalid response format:', rawData);
+            logger.error('Invalid response format:', rawData);
             continue;
           }
 
@@ -229,10 +233,30 @@ export default function LocalProvidersTab() {
 
       return updatedModel !== undefined;
     } catch (error) {
-      console.error(`Error updating ${modelName}:`, error);
+      logger.error(`Error updating ${modelName}:`, error);
       return false;
     }
   };
+
+  const handleUnloadAll = useCallback(async () => {
+    setIsUnloading(true);
+
+    try {
+      const response = await fetch('/api/llm-unload', { method: 'POST' });
+      const data = (await response.json()) as { success: boolean; message: string; unloaded?: { total: number } };
+
+      if (data.success) {
+        toast(data.message);
+      } else {
+        toast(data.message || 'Ошибка при выгрузке моделей');
+      }
+    } catch (err) {
+      toast('Не удалось выгрузить модели');
+      logger.error('Unload error:', err);
+    } finally {
+      setIsUnloading(false);
+    }
+  }, [toast]);
 
   const handleToggleCategory = useCallback(
     async (enabled: boolean) => {
@@ -296,7 +320,7 @@ export default function LocalProvidersTab() {
       toast(`Deleted ${modelName}`);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
-      console.error(`Error deleting ${modelName}:`, errorMessage);
+      logger.error(`Error deleting ${modelName}:`, errorMessage);
       toast(`Failed to delete ${modelName}`);
     }
   };
@@ -412,7 +436,34 @@ export default function LocalProvidersTab() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            <motion.button
+              onClick={handleUnloadAll}
+              disabled={isUnloading}
+              className={classNames(
+                'flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium',
+                'bg-red-500/10 text-red-400 border border-red-500/20',
+                'hover:bg-red-500/20 hover:border-red-500/40',
+                'transition-all duration-200',
+                { 'opacity-50 cursor-not-allowed': isUnloading },
+              )}
+              whileHover={isUnloading ? {} : { scale: 1.02 }}
+              whileTap={isUnloading ? {} : { scale: 0.98 }}
+              title="Выгрузить все модели из GPU памяти (Ollama + LM Studio)"
+            >
+              {isUnloading ? (
+                <>
+                  <div className="i-ph:spinner-gap-bold animate-spin w-4 h-4" />
+                  <span>Выгрузка...</span>
+                </>
+              ) : (
+                <>
+                  <div className="i-ph:eject w-4 h-4" />
+                  <span>Выгрузить все</span>
+                </>
+              )}
+            </motion.button>
+            <div className="w-px h-6 bg-bolt-elements-borderColor" />
             <span className="text-sm text-bolt-elements-textSecondary">Enable All</span>
             <Switch
               checked={categoryEnabled}

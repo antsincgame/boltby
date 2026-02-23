@@ -13,499 +13,20 @@ import { createScopedLogger } from '~/utils/logger';
 import { unreachable } from '~/utils/unreachable';
 import type { ActionCallbackData } from './message-parser';
 import type { BoltShell } from '~/utils/shell';
+import { logStore } from '~/lib/stores/logs';
+import {
+  PACKAGE_NAME_CORRECTIONS,
+  KNOWN_TAILWIND_PLUGINS,
+  sanitizeNpmCommand,
+  fixPackageJson,
+  fixViteConfig,
+  fixTailwindOrPostcssConfig,
+  fixSourceImports,
+  scaffoldViteFiles,
+  extractTailwindPlugins,
+} from './action-fixers';
 
 const logger = createScopedLogger('ActionRunner');
-
-/**
- * LLMs frequently hallucinate npm package names. This map auto-corrects
- * mistakes so `npm install` inside WebContainer doesn't fail with 404.
- */
-const PACKAGE_NAME_CORRECTIONS: Record<string, string> = {
-  // Lucide icons
-  '@lucide/icons-react': 'lucide-react',
-  '@lucide/react': 'lucide-react',
-  'lucide-icons': 'lucide-react',
-  '@lucide-icons/react': 'lucide-react',
-  'lucide-react-icons': 'lucide-react',
-
-  // Heroicons
-  '@heroicons/react/solid': '@heroicons/react',
-  '@heroicons/react/outline': '@heroicons/react',
-  '@heroicons/react/24/solid': '@heroicons/react',
-  '@heroicons/react/24/outline': '@heroicons/react',
-
-  // Shadcn (not a real npm package)
-  '@shadcn/ui': '@radix-ui/react-slot',
-  'shadcn-ui': '@radix-ui/react-slot',
-
-  // Router
-  'react-router': 'react-router-dom',
-  '@react-router': 'react-router-dom',
-
-  // Icons
-  'react-icon': 'react-icons',
-  '@react-icons': 'react-icons',
-  '@react-icons/all-files': 'react-icons',
-
-  // Tailwind
-  'tailwindcss/postcss': 'tailwindcss',
-  '@tailwindcss/postcss': 'tailwindcss',
-  '@tailwindcss/vite': 'tailwindcss',
-
-  // Animation
-  'framer-motion/react': 'framer-motion',
-  '@framer-motion': 'framer-motion',
-  '@framer-motion/react': 'framer-motion',
-
-  // Toasts
-  'react-hot-toast/headless': 'react-hot-toast',
-  '@react-hot-toast': 'react-hot-toast',
-
-  // React Query / TanStack
-  '@tanstack/query': '@tanstack/react-query',
-  'react-query': '@tanstack/react-query',
-  '@tanstack/query-core': '@tanstack/react-query',
-
-  // Forms
-  '@hookform/resolvers/zod': '@hookform/resolvers',
-  '@hookform/resolvers/yup': '@hookform/resolvers',
-
-  // Axios
-  '@axios': 'axios',
-  'axios/dist': 'axios',
-
-  // Zod
-  'zod/lib': 'zod',
-  '@zod': 'zod',
-
-  // Date
-  moment: 'date-fns',
-  'moment-timezone': 'date-fns',
-
-  // Clsx
-  classnames: 'clsx',
-
-  // Misc
-  '@types/react-dom': '@types/react',
-
-  // Pocketbase
-  '@types/pocketbase': 'pocketbase',
-  'pocketbase-types': 'pocketbase',
-};
-
-/**
- * Packages that ship their own TypeScript types — @types/* versions don't exist.
- * These will be REMOVED from devDependencies when found.
- */
-const PACKAGES_TO_REMOVE = new Set([
-  '@shadcn/components',
-  '@shadcn/themes',
-  'shadcn',
-  '@nextui/react',
-
-  // Packages that bundle their own types — no @types/* needed
-  '@types/lucide-react',
-  '@types/framer-motion',
-  '@types/axios',
-  '@types/zod',
-  '@types/date-fns',
-  '@types/clsx',
-  '@types/sonner',
-  '@types/react-router-dom',
-  '@types/react-router',
-  '@types/pocketbase',
-  '@types/tailwindcss',
-  '@types/vite',
-]);
-
-/**
- * Sanitizes an `npm install` shell command by:
- *  1. Replacing wrong package names using PACKAGE_NAME_CORRECTIONS
- *  2. Removing packages from PACKAGES_TO_REMOVE
- * Returns the cleaned command string (or original if no changes needed).
- */
-function sanitizeNpmCommand(command: string): string {
-  // Only process npm install / npm i commands
-  if (!/npm\s+(install|i)\b/.test(command)) {
-    return command;
-  }
-
-  // Split on whitespace but preserve flags (-D, --save-dev, etc.)
-  const parts = command.split(/\s+/);
-  const cleaned: string[] = [];
-  let changed = false;
-
-  for (const part of parts) {
-    // Strip version suffix to get bare package name (e.g. "lucide-react@^0.344" → "lucide-react")
-    const atVersionIdx = part.lastIndexOf('@');
-    const bareName = atVersionIdx > 0 ? part.slice(0, atVersionIdx) : part;
-    const version = atVersionIdx > 0 ? part.slice(atVersionIdx) : '';
-
-    if (PACKAGES_TO_REMOVE.has(bareName)) {
-      logger.info(`📦 Auto-remove from npm command: "${part}"`);
-      changed = true;
-      continue;
-    }
-
-    if (PACKAGE_NAME_CORRECTIONS[bareName]) {
-      const corrected = PACKAGE_NAME_CORRECTIONS[bareName] + version;
-      logger.info(`📦 Auto-fix in npm command: "${part}" → "${corrected}"`);
-      cleaned.push(corrected);
-      changed = true;
-      continue;
-    }
-
-    cleaned.push(part);
-  }
-
-  if (!changed) {
-    return command;
-  }
-
-  // If only "npm install" remains with no packages, run plain npm install
-  return cleaned.join(' ');
-}
-
-/**
- * If React is a dependency and these are missing, auto-add them to devDependencies.
- */
-const REACT_REQUIRED_DEV_DEPS: Record<string, string> = {
-  '@vitejs/plugin-react': '^4.3.0',
-};
-
-function fixPackageJson(content: string): string {
-  try {
-    const pkg = JSON.parse(content);
-    let changed = false;
-
-    const allDepKeys = ['dependencies', 'devDependencies', 'peerDependencies'] as const;
-
-    // 1. Fix wrong package names
-    for (const depKey of allDepKeys) {
-      const deps = pkg[depKey];
-
-      if (!deps || typeof deps !== 'object') {
-        continue;
-      }
-
-      for (const [wrong, correct] of Object.entries(PACKAGE_NAME_CORRECTIONS)) {
-        if (wrong in deps) {
-          const version = deps[wrong];
-          delete deps[wrong];
-
-          if (!(correct in deps)) {
-            deps[correct] = version;
-          }
-
-          logger.info(`📦 Auto-fix pkg: "${wrong}" → "${correct}"`);
-          changed = true;
-        }
-      }
-
-      // Remove non-existent packages
-      for (const badPkg of PACKAGES_TO_REMOVE) {
-        if (badPkg in deps) {
-          delete deps[badPkg];
-          logger.info(`📦 Auto-remove non-existent: "${badPkg}"`);
-          changed = true;
-        }
-      }
-    }
-
-    // 2. Ensure "type": "module" for Vite projects
-    const hasVite = pkg.devDependencies?.vite || pkg.dependencies?.vite;
-
-    if (hasVite && !pkg.type) {
-      pkg.type = 'module';
-      logger.info('📦 Auto-fix: added "type": "module" for Vite project');
-      changed = true;
-    }
-
-    // 3. Ensure React projects have @vitejs/plugin-react
-    const hasReact = pkg.dependencies?.react || pkg.devDependencies?.react;
-
-    if (hasReact && hasVite) {
-      if (!pkg.devDependencies) {
-        pkg.devDependencies = {};
-      }
-
-      for (const [dep, version] of Object.entries(REACT_REQUIRED_DEV_DEPS)) {
-        if (!pkg.devDependencies[dep] && !pkg.dependencies?.[dep]) {
-          pkg.devDependencies[dep] = version;
-          logger.info(`📦 Auto-add missing: "${dep}@${version}"`);
-          changed = true;
-        }
-      }
-    }
-
-    // 4. Fix Vite version (upgrade v3/v4 → v5)
-    for (const depKey of allDepKeys) {
-      const deps = pkg[depKey];
-
-      if (!deps) {
-        continue;
-      }
-
-      if (deps.vite && /^\^?[34]\./.test(deps.vite)) {
-        deps.vite = '^5.4.0';
-        logger.info('📦 Auto-fix: upgraded vite to ^5.4.0');
-        changed = true;
-      }
-
-      if (deps['@vitejs/plugin-react'] && /^\^?[123]\./.test(deps['@vitejs/plugin-react'])) {
-        deps['@vitejs/plugin-react'] = '^4.3.0';
-        logger.info('📦 Auto-fix: upgraded @vitejs/plugin-react to ^4.3.0');
-        changed = true;
-      }
-    }
-
-    // 5. Ensure scripts.dev exists
-    if (!pkg.scripts) {
-      pkg.scripts = {};
-    }
-
-    if (!pkg.scripts.dev && hasVite) {
-      pkg.scripts.dev = 'vite';
-      logger.info('📦 Auto-fix: added missing "dev": "vite" script');
-      changed = true;
-    }
-
-    return changed ? JSON.stringify(pkg, null, 2) : content;
-  } catch {
-    return repairTruncatedJson(content);
-  }
-}
-
-/**
- * Attempt to repair JSON that was truncated mid-generation (LLM ran out of tokens).
- * Strategy: remove the last incomplete key-value pair, then close all open braces/brackets.
- */
-function repairTruncatedJson(content: string): string {
-  let text = content.trim();
-
-  if (!text.startsWith('{')) {
-    return content;
-  }
-
-  // Remove trailing comma if present
-  text = text.replace(/,\s*$/, '');
-
-  /*
-   * If we're inside an incomplete string value, remove it
-   * e.g. `"@eslint/js":\n` or `"name": "my-` → remove the last incomplete pair
-   */
-  const lastCompleteEntry = text.lastIndexOf('",');
-
-  if (lastCompleteEntry === -1) {
-    return content;
-  }
-
-  // Cut to last complete key-value entry
-  text = text.substring(0, lastCompleteEntry + 1);
-
-  // Count open/close braces and brackets
-  let openBraces = 0;
-  let openBrackets = 0;
-  let inString = false;
-  let escape = false;
-
-  for (const ch of text) {
-    if (escape) {
-      escape = false;
-      continue;
-    }
-
-    if (ch === '\\') {
-      escape = true;
-      continue;
-    }
-
-    if (ch === '"') {
-      inString = !inString;
-      continue;
-    }
-
-    if (inString) {
-      continue;
-    }
-
-    if (ch === '{') {
-      openBraces++;
-    } else if (ch === '}') {
-      openBraces--;
-    } else if (ch === '[') {
-      openBrackets++;
-    } else if (ch === ']') {
-      openBrackets--;
-    }
-  }
-
-  // Close all open brackets then braces
-  text += '\n';
-
-  for (let i = 0; i < openBrackets; i++) {
-    text += ']';
-  }
-
-  for (let i = 0; i < openBraces; i++) {
-    text += '}';
-  }
-
-  try {
-    const repaired = JSON.parse(text);
-    logger.warn(`🔧 Repaired truncated package.json (closed ${openBraces} braces, ${openBrackets} brackets)`);
-
-    return JSON.stringify(repaired, null, 2);
-  } catch {
-    logger.error('🔧 Could not repair truncated package.json');
-
-    return content;
-  }
-}
-
-/**
- * Fix common LLM mistakes in vite.config files:
- * - Missing React plugin import/usage
- * - Wrong plugin syntax
- */
-function fixViteConfig(content: string): string {
-  let fixed = content;
-  let changed = false;
-
-  const hasReactPlugin = /plugin-react|@vitejs\/plugin-react/.test(fixed);
-  const definesPlugins = /plugins\s*:/.test(fixed);
-
-  if (!hasReactPlugin && definesPlugins) {
-    if (!fixed.includes("from '@vitejs/plugin-react'")) {
-      fixed = `import react from '@vitejs/plugin-react';\n${fixed}`;
-      changed = true;
-    }
-
-    if (!/react\s*\(/.test(fixed)) {
-      fixed = fixed.replace(/plugins\s*:\s*\[/, 'plugins: [react(), ');
-      changed = true;
-    }
-  }
-
-  if (!hasReactPlugin && !definesPlugins) {
-    fixed = `import react from '@vitejs/plugin-react';\n${fixed}`;
-    fixed = fixed.replace(
-      /export\s+default\s+defineConfig\s*\(\s*\{/,
-      'export default defineConfig({\n  plugins: [react()],',
-    );
-    changed = true;
-  }
-
-  // Fix require() in ESM config
-  if (fixed.includes('require(') && fixed.includes('import ')) {
-    fixed = fixed.replace(/const\s+(\w+)\s*=\s*require\(['"]([^'"]+)['"]\);?/g, "import $1 from '$2';");
-    changed = true;
-  }
-
-  if (changed) {
-    logger.info('⚙️ Auto-fix: patched vite.config');
-  }
-
-  return fixed;
-}
-
-/**
- * Fix common LLM mistakes in generated source files.
- */
-function fixSourceImports(content: string, filePath: string): string {
-  let fixed = content;
-  let changed = false;
-
-  // Fix wrong Lucide imports in source files
-  const lucideImportPattern = /from\s+['"]@lucide\/(?:icons-react|react)['"]/g;
-
-  if (lucideImportPattern.test(fixed)) {
-    fixed = fixed.replace(lucideImportPattern, "from 'lucide-react'");
-    logger.info(`⚙️ Auto-fix imports in ${filePath}: @lucide/* → lucide-react`);
-    changed = true;
-  }
-
-  // Fix wrong react-router import
-  const routerPattern = /from\s+['"]react-router['"]/g;
-
-  if (routerPattern.test(fixed) && !fixed.includes('react-router-dom')) {
-    fixed = fixed.replace(routerPattern, "from 'react-router-dom'");
-    logger.info(`⚙️ Auto-fix imports in ${filePath}: react-router → react-router-dom`);
-    changed = true;
-  }
-
-  // Fix wrong react-query import
-  const queryPattern = /from\s+['"]react-query['"]/g;
-
-  if (queryPattern.test(fixed)) {
-    fixed = fixed.replace(queryPattern, "from '@tanstack/react-query'");
-    logger.info(`⚙️ Auto-fix imports in ${filePath}: react-query → @tanstack/react-query`);
-    changed = true;
-  }
-
-  /*
-   * Fix wrong PocketBase named import: { PocketBase } → default import
-   * pocketbase uses default export, not named export
-   */
-  const pbNamedImport = /import\s*\{\s*PocketBase\s*\}\s*from\s*['"]pocketbase['"]/g;
-
-  if (pbNamedImport.test(fixed)) {
-    fixed = fixed.replace(pbNamedImport, "import PocketBase from 'pocketbase'");
-    logger.info(`⚙️ Auto-fix imports in ${filePath}: { PocketBase } → default import`);
-    changed = true;
-  }
-
-  // Fix wrong axios named import: { axios } → default import
-  const axiosNamedImport = /import\s*\{\s*axios\s*\}\s*from\s*['"]axios['"]/g;
-
-  if (axiosNamedImport.test(fixed)) {
-    fixed = fixed.replace(axiosNamedImport, "import axios from 'axios'");
-    logger.info(`⚙️ Auto-fix imports in ${filePath}: { axios } → default import`);
-    changed = true;
-  }
-
-  // Fix wrong framer-motion import path
-  const framerPattern = /from\s+['"]framer-motion\/react['"]/g;
-
-  if (framerPattern.test(fixed)) {
-    fixed = fixed.replace(framerPattern, "from 'framer-motion'");
-    logger.info(`⚙️ Auto-fix imports in ${filePath}: framer-motion/react → framer-motion`);
-    changed = true;
-  }
-
-  /*
-   * Wrap raw PocketBase useEffect calls with error handling
-   * Detects patterns like: useEffect(() => { pb.collection(...).getList(...) }, [])
-   * where the PocketBase call lacks try/catch — which crashes the app if PocketBase is unreachable
-   */
-  if (
-    fixed.includes('pocketbase') &&
-    fixed.includes('useEffect') &&
-    fixed.includes('.getList(') &&
-    !fixed.includes('.catch(')
-  ) {
-    // Add .catch(() => {}) to any bare pb.collection().getList() chains inside useEffect
-    const bareGetList = /(\bpb\.collection\([^)]+\)\.getList\([^)]*\))(?![\s\S]*?\.catch)/g;
-
-    if (bareGetList.test(fixed)) {
-      fixed = fixed.replace(bareGetList, '$1.catch(() => {})');
-      logger.info(`⚙️ Auto-fix: added .catch() to bare PocketBase getList() in ${filePath}`);
-      changed = true;
-    }
-  }
-
-  // Fix require() mixed with import in .ts/.tsx/.jsx files
-  if (/\.(tsx?|jsx)$/.test(filePath) && fixed.includes('require(')) {
-    fixed = fixed.replace(/const\s+(\w+)\s*=\s*require\(['"]([^'"]+)['"]\);?/g, "import $1 from '$2';");
-
-    if (fixed !== content) {
-      logger.info(`⚙️ Auto-fix: converted require() → import in ${filePath}`);
-      changed = true;
-    }
-  }
-
-  return changed ? fixed : content;
-}
 
 export type ActionStatus = 'pending' | 'running' | 'complete' | 'aborted' | 'failed';
 
@@ -537,22 +58,16 @@ class ActionCommandError extends Error {
   readonly _header: string;
 
   constructor(message: string, output: string) {
-    // Create a formatted message that includes both the error message and output
     const formattedMessage = `Failed To Execute Shell Command: ${message}\n\nOutput:\n${output}`;
     super(formattedMessage);
 
-    // Set the output separately so it can be accessed programmatically
     this._header = message;
     this._output = output;
 
-    // Maintain proper prototype chain
     Object.setPrototypeOf(this, ActionCommandError.prototype);
-
-    // Set the name of the error for better debugging
     this.name = 'ActionCommandError';
   }
 
-  // Optional: Add a method to get just the terminal output
   get output() {
     return this._output;
   }
@@ -564,6 +79,7 @@ class ActionCommandError extends Error {
 export class ActionRunner {
   #webcontainer: Promise<WebContainer>;
   #currentExecutionPromise: Promise<void> = Promise.resolve();
+  #currentStartPromise: Promise<void> = Promise.resolve();
   #shellTerminal: () => BoltShell;
   runnerId = atom<string>(`${Date.now()}`);
   actions: ActionsMap = map({});
@@ -593,7 +109,6 @@ export class ActionRunner {
     const action = actions[actionId];
 
     if (action) {
-      // action already added
       return;
     }
 
@@ -624,11 +139,11 @@ export class ActionRunner {
     }
 
     if (action.executed) {
-      return; // No return value here
+      return;
     }
 
     if (isStreaming && action.type !== 'file') {
-      return; // No return value here
+      return;
     }
 
     this.#updateAction(actionId, { ...action, ...data.action, executed: !isStreaming });
@@ -638,7 +153,7 @@ export class ActionRunner {
         return this.#executeAction(actionId, isStreaming);
       })
       .catch((error) => {
-        console.error('Action failed:', error);
+        logger.error('Action failed:', error);
       });
 
     await this.#currentExecutionPromise;
@@ -664,7 +179,7 @@ export class ActionRunner {
         case 'pocketbase': {
           try {
             await this.handlePocketBaseAction(action as PocketBaseAction);
-          } catch (error: any) {
+          } catch (error: unknown) {
             this.#updateAction(actionId, {
               status: 'failed',
               error: error instanceof Error ? error.message : 'PocketBase action failed',
@@ -675,15 +190,14 @@ export class ActionRunner {
         }
         case 'build': {
           const buildOutput = await this.#runBuildAction(action);
-
-          // Store build output for deployment
           this.buildOutput = buildOutput;
           break;
         }
         case 'start': {
-          // making the start app non blocking
+          const prevStart = this.#currentStartPromise;
 
-          this.#runStartAction(action)
+          this.#currentStartPromise = prevStart
+            .then(() => this.#runStartAction(action))
             .then(() => this.#updateAction(actionId, { status: 'complete' }))
             .catch((err: Error) => {
               if (action.abortSignal.aborted) {
@@ -704,12 +218,6 @@ export class ActionRunner {
                 content: err.output,
               });
             });
-
-          /*
-           * adding a delay to avoid any race condition between 2 start actions
-           * i am up for a better approach
-           */
-          await new Promise((resolve) => setTimeout(resolve, 2000));
 
           return;
         }
@@ -737,7 +245,6 @@ export class ActionRunner {
         content: error.output,
       });
 
-      // re-throw the error to be caught in the promise chain
       throw error;
     }
   }
@@ -755,12 +262,22 @@ export class ActionRunner {
     }
 
     const sanitizedCommand = sanitizeNpmCommand(action.content);
+    logStore.logSystem(`Shell: ${sanitizedCommand.substring(0, 100)}`, { command: sanitizedCommand });
 
     const resp = await shell.executeCommand(this.runnerId.get(), sanitizedCommand, () => {
       logger.debug(`[${action.type}]:Aborting Action\n\n`, action);
       action.abort();
     });
     logger.debug(`${action.type} Shell Response: [exit code:${resp?.exitCode}]`);
+
+    if (resp?.exitCode === 0) {
+      logStore.logSystem(`Shell OK: ${sanitizedCommand.substring(0, 60)}`, { exitCode: 0 });
+    } else {
+      logStore.logError(`Shell FAIL (exit ${resp?.exitCode}): ${sanitizedCommand.substring(0, 60)}`, undefined, {
+        exitCode: resp?.exitCode,
+        output: resp?.output?.substring(0, 300),
+      });
+    }
 
     if (resp?.exitCode != 0) {
       const output = resp?.output || '';
@@ -778,9 +295,6 @@ export class ActionRunner {
     }
   }
 
-  /**
-   * Parse E404 package from npm output, remove it from package.json, and retry.
-   */
   async #retryNpmInstallWithFix(shell: BoltShell, errorOutput: string): Promise<boolean> {
     const notFoundMatch = errorOutput.match(/404\s+Not Found\s+-\s+GET\s+https?:\/\/registry\.npmjs\.org\/([^\s]+)/);
 
@@ -855,6 +369,8 @@ export class ActionRunner {
       unreachable('Shell terminal not found');
     }
 
+    logStore.logSystem(`Dev server starting: ${action.content}`, { command: action.content });
+
     const resp = await shell.executeCommand(this.runnerId.get(), action.content, () => {
       logger.debug(`[${action.type}]:Aborting Action\n\n`, action);
       action.abort();
@@ -862,8 +378,14 @@ export class ActionRunner {
     logger.debug(`${action.type} Shell Response: [exit code:${resp?.exitCode}]`);
 
     if (resp?.exitCode != 0) {
+      logStore.logError(`Dev server failed (exit ${resp?.exitCode})`, undefined, {
+        command: action.content,
+        output: resp?.output?.substring(0, 300),
+      });
       throw new ActionCommandError('Failed To Start Application', resp?.output || 'No Output Available');
     }
+
+    logStore.logSystem('Dev server started', { command: action.content });
 
     return resp;
   }
@@ -878,7 +400,6 @@ export class ActionRunner {
 
     let folder = nodePath.dirname(relativePath);
 
-    // remove trailing slashes
     folder = folder.replace(/\/+$/g, '');
 
     if (folder !== '.') {
@@ -892,20 +413,91 @@ export class ActionRunner {
 
     try {
       let fileContent = action.content;
+      let writePath = relativePath;
 
       if (relativePath === 'package.json' || relativePath.endsWith('/package.json')) {
+        const hadBannedFramework =
+          /"(next|astro|@angular\/core|solid-start|@builder\.io\/qwik|@sveltejs\/kit|nuxt|gatsby|@remix-run\/react)"\s*:/.test(
+            fileContent,
+          );
         fileContent = fixPackageJson(fileContent);
+
+        if (
+          hadBannedFramework &&
+          !/"(next|astro|@angular\/core|solid-start|@builder\.io\/qwik|@sveltejs\/kit|nuxt|gatsby|@remix-run\/react)"\s*:/.test(
+            fileContent,
+          )
+        ) {
+          this.#scaffoldViteForBannedFramework(webcontainer);
+        }
       } else if (/vite\.config\.(ts|js|mjs)$/.test(relativePath)) {
         fileContent = fixViteConfig(fileContent);
+      } else if (/(?:postcss|tailwind)\.config\.(js|ts|mjs)$/.test(relativePath)) {
+        const requiredPlugins = extractTailwindPlugins(fileContent);
+        fileContent = fixTailwindOrPostcssConfig(fileContent, relativePath);
+        writePath = relativePath.replace(/\.(js|ts|mjs)$/, '.cjs');
+
+        if (writePath !== relativePath) {
+          logger.info(`⚙️ Auto-fix: renamed ${relativePath} → ${writePath}`);
+        }
+
+        if (requiredPlugins.length > 0) {
+          this.#ensureTailwindPlugins(webcontainer, requiredPlugins);
+        }
       } else if (/\.(tsx?|jsx)$/.test(relativePath)) {
         fileContent = fixSourceImports(fileContent, relativePath);
       }
 
-      await webcontainer.fs.writeFile(relativePath, fileContent);
-      logger.debug(`File written ${relativePath}`);
+      await webcontainer.fs.writeFile(writePath, fileContent);
+      logger.debug(`File written ${writePath}`);
+      logStore.logSystem(`File: ${writePath}`, { size: fileContent.length });
     } catch (error) {
       logger.error('Failed to write file\n\n', error);
       throw error;
+    }
+  }
+
+  async #ensureTailwindPlugins(webcontainer: WebContainer, plugins: string[]) {
+    try {
+      const pkgContent = await webcontainer.fs.readFile('package.json', 'utf-8');
+      const pkg = JSON.parse(pkgContent);
+      let changed = false;
+
+      if (!pkg.devDependencies) {
+        pkg.devDependencies = {};
+      }
+
+      for (const plugin of plugins) {
+        const version = KNOWN_TAILWIND_PLUGINS[plugin];
+
+        if (!version) {
+          continue;
+        }
+
+        if (!pkg.dependencies?.[plugin] && !pkg.devDependencies[plugin]) {
+          pkg.devDependencies[plugin] = version;
+          logger.info(`📦 Auto-add missing Tailwind plugin: ${plugin}@${version}`);
+          changed = true;
+        }
+      }
+
+      if (changed) {
+        await webcontainer.fs.writeFile('package.json', JSON.stringify(pkg, null, 2));
+        logStore.logSystem('Auto-added missing Tailwind plugins to package.json', { plugins: plugins.join(', ') });
+      }
+    } catch (err) {
+      logger.debug('Could not auto-add Tailwind plugins:', err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async #scaffoldViteForBannedFramework(webcontainer: WebContainer) {
+    logger.info('🔄 Banned framework → Vite+React: scaffolding essential files');
+    logStore.logWarning('Banned framework auto-conversion: creating index.html, vite.config.ts, src/main.tsx');
+
+    try {
+      await scaffoldViteFiles(webcontainer as Parameters<typeof scaffoldViteFiles>[0]);
+    } catch (err) {
+      logger.warn('🔄 Vite scaffold failed:', err instanceof Error ? err.message : String(err));
     }
   }
 
@@ -929,7 +521,6 @@ export class ActionRunner {
   }
 
   async saveFileHistory(filePath: string, history: FileHistory) {
-    // const webcontainer = await this.#webcontainer;
     const historyPath = this.#getHistoryPath(filePath);
 
     await this.#runFileAction({
@@ -949,7 +540,6 @@ export class ActionRunner {
       unreachable('Expected build action');
     }
 
-    // Trigger build started alert
     this.onDeployAlert?.({
       type: 'info',
       title: 'Building Application',
@@ -962,7 +552,6 @@ export class ActionRunner {
 
     const webcontainer = await this.#webcontainer;
 
-    // Create a new terminal specifically for the build
     const buildProcess = await webcontainer.spawn('npm', ['run', 'build']);
 
     let output = '';
@@ -977,7 +566,6 @@ export class ActionRunner {
     const exitCode = await buildProcess.exit;
 
     if (exitCode !== 0) {
-      // Trigger build failed alert
       this.onDeployAlert?.({
         type: 'error',
         title: 'Build Failed',
@@ -992,7 +580,6 @@ export class ActionRunner {
       throw new ActionCommandError('Build Failed', output || 'No Output Available');
     }
 
-    // Trigger build success alert
     this.onDeployAlert?.({
       type: 'success',
       title: 'Build Completed',
@@ -1003,12 +590,10 @@ export class ActionRunner {
       source: 'netlify',
     });
 
-    // Check for common build directories
     const commonBuildDirs = ['dist', 'build', 'out', 'output', '.next', 'public'];
 
     let buildDir = '';
 
-    // Try to find the first existing build directory
     for (const dir of commonBuildDirs) {
       const dirPath = nodePath.join(webcontainer.workdir, dir);
 
@@ -1018,12 +603,10 @@ export class ActionRunner {
         logger.debug(`Found build directory: ${buildDir}`);
         break;
       } catch (error) {
-        // Directory doesn't exist, try the next one
         logger.debug(`Build directory ${dir} not found, trying next option. ${error}`);
       }
     }
 
-    // If no build directory was found, use the default (dist)
     if (!buildDir) {
       buildDir = nodePath.join(webcontainer.workdir, 'dist');
       logger.debug(`No build directory found, defaulting to: ${buildDir}`);
@@ -1035,6 +618,7 @@ export class ActionRunner {
       output,
     };
   }
+
   async handlePocketBaseAction(action: PocketBaseAction) {
     const { operation, content, filePath } = action;
     logger.debug('[PocketBase Action]:', { operation, filePath, content });
@@ -1075,7 +659,6 @@ export class ActionRunner {
     }
   }
 
-  // Add this method declaration to the class
   handleDeployAction(
     stage: 'building' | 'deploying' | 'complete',
     status: ActionStatus,

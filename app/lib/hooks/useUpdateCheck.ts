@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react';
 import { checkForUpdates, acknowledgeUpdate } from '~/lib/api/updates';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('UpdateCheck');
 
 const LAST_ACKNOWLEDGED_VERSION_KEY = 'bolt_last_acknowledged_version';
 
@@ -23,7 +26,7 @@ export const useUpdateCheck = () => {
         // Only show update if it's a new version and hasn't been acknowledged
         setHasUpdate(available && version !== lastAcknowledgedVersion);
       } catch (error) {
-        console.error('Failed to check for updates:', error);
+        logger.error('Failed to check for updates:', error);
       }
     };
 
@@ -44,13 +47,13 @@ export const useUpdateCheck = () => {
       try {
         localStorage.setItem(LAST_ACKNOWLEDGED_VERSION_KEY, version);
       } catch (error) {
-        console.error('Failed to persist acknowledged version:', error);
+        logger.error('Failed to persist acknowledged version:', error);
       }
 
       setLastAcknowledgedVersion(version);
       setHasUpdate(false);
     } catch (error) {
-      console.error('Failed to acknowledge update:', error);
+      logger.error('Failed to acknowledge update:', error);
     }
   };
 

@@ -360,11 +360,30 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               cumulativeUsage.totalTokens += usage.totalTokens || 0;
             }
 
+            logger.info(
+              `onFinish: reason=${finishReason}, tokens=${usage?.completionTokens ?? '?'}, segments=${stream.switches}`,
+            );
+
             const hasUnclosedArtifact = content.includes('<boltArtifact') && !content.includes('</boltArtifact>');
             const hasUnclosedAction =
               content.includes('<boltAction') &&
               content.split('<boltAction').length > content.split('</boltAction>').length;
-            const isIncomplete = hasUnclosedArtifact || hasUnclosedAction;
+
+            const fileActionCount = (content.match(/<boltAction[^>]*type="file"/g) || []).length;
+            const hasShellAction = content.includes('type="shell"');
+            const hasStartAction = content.includes('type="start"');
+            const hasArtifact = content.includes('<boltArtifact');
+            const isFirstSegment = stream.switches === 0;
+            const tooFewFiles =
+              hasArtifact && isFirstSegment && fileActionCount < 4 && (!hasShellAction || !hasStartAction);
+
+            const isIncomplete = hasUnclosedArtifact || hasUnclosedAction || tooFewFiles;
+
+            if (tooFewFiles) {
+              logger.warn(
+                `Incomplete project detected: only ${fileActionCount} files, shell=${hasShellAction}, start=${hasStartAction}. Forcing continuation.`,
+              );
+            }
 
             if (finishReason !== 'length' && !isIncomplete) {
               dataStream.writeMessageAnnotation({
@@ -389,7 +408,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
 
             if (isIncomplete && finishReason !== 'length') {
               logger.warn(
-                `Model stopped early with unclosed tags (finishReason=${finishReason}). Forcing continuation.`,
+                `Model stopped early (finishReason=${finishReason}, files=${fileActionCount}). Forcing continuation.`,
               );
             }
 

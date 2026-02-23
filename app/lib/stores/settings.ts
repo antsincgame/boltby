@@ -168,7 +168,8 @@ const getInitialSettings = () => {
 
     try {
       return JSON.parse(stored);
-    } catch {
+    } catch (err) {
+      log.debug('Failed to parse stored setting, using default:', err instanceof Error ? err.message : String(err));
       return defaultValue;
     }
   };

@@ -1,4 +1,7 @@
 import React, { Component, type ErrorInfo, type ReactNode } from 'react';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('ErrorBoundary');
 
 interface Props {
   children: ReactNode;
@@ -22,7 +25,7 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('[ErrorBoundary]', error.message, errorInfo.componentStack);
+    logger.error('[ErrorBoundary]', error.message, errorInfo.componentStack);
     this.props.onError?.(error, errorInfo);
   }
 

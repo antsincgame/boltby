@@ -1,7 +1,3 @@
-/*
- * @ts-nocheck
- * Preventing TS checks with files presented in the video for a better presentation.
- */
 import { useStore } from '@nanostores/react';
 import type { Message } from 'ai';
 import { useChat } from 'ai/react';
@@ -182,13 +178,30 @@ export const ChatImpl = memo(
 
         if (usage) {
           logger.debug('Token usage:', usage);
-          logStore.logProvider('Chat response completed', {
-            component: 'Chat',
-            action: 'response',
+
+          const promptTokens = usage.promptTokens || 0;
+          const completionTokens = usage.completionTokens || 0;
+
+          logStore.logProvider(`LLM done: ${completionTokens} tokens generated (prompt: ${promptTokens})`, {
             model,
             provider: provider.name,
-            usage,
-            messageLength: message.content.length,
+            promptTokens,
+            completionTokens,
+            totalTokens: usage.totalTokens || 0,
+            responseLength: message.content.length,
+          });
+
+          if (completionTokens < 500) {
+            logStore.logWarning(`Low output: only ${completionTokens} tokens — site may be incomplete`, {
+              model,
+              completionTokens,
+            });
+          }
+        } else {
+          logStore.logProvider('LLM response finished (no usage data)', {
+            model,
+            provider: provider.name,
+            responseLength: message.content.length,
           });
         }
 
@@ -294,6 +307,12 @@ export const ChatImpl = memo(
         abort();
         return;
       }
+
+      logStore.logProvider(`Sending request to ${provider.name}/${model}`, {
+        provider: provider.name,
+        model,
+        promptLength: messageContent.length,
+      });
 
       // If no locked items, proceed normally with the original message
       const finalMessageContent = messageContent;

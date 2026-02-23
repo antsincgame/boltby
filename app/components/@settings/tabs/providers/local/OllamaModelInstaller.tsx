@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { classNames } from '~/utils/classNames';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('OllamaInstaller');
 import { Progress } from '~/components/ui/Progress';
 import { useToast } from '~/components/ui/use-toast';
 import { useSettings } from '~/lib/hooks/useSettings';
@@ -179,7 +182,7 @@ export default function OllamaModelInstaller({ onModelInstalled }: OllamaModelIn
         }),
       );
     } catch (error) {
-      console.error('Error checking installed models:', error);
+      logger.error('Error checking installed models:', error);
     }
   };
 
@@ -195,7 +198,7 @@ export default function OllamaModelInstaller({ onModelInstalled }: OllamaModelIn
       await checkInstalledModels();
       toast('Model versions checked');
     } catch (err) {
-      console.error('Failed to check model versions:', err);
+      logger.error('Failed to check model versions:', err);
       toast('Failed to check model versions');
     } finally {
       setIsChecking(false);
@@ -282,7 +285,7 @@ export default function OllamaModelInstaller({ onModelInstalled }: OllamaModelIn
               lastBytes = data.completed || 0;
             }
           } catch (err) {
-            console.error('Error parsing progress:', err);
+            logger.error('Error parsing progress:', err);
           }
         }
       }
@@ -295,7 +298,7 @@ export default function OllamaModelInstaller({ onModelInstalled }: OllamaModelIn
       }, 1000);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
-      console.error(`Error installing ${modelToInstall}:`, errorMessage);
+      logger.error(`Error installing ${modelToInstall}:`, errorMessage);
       toast(`Failed to install ${modelToInstall}. ${errorMessage}`);
     } finally {
       setIsInstalling(false);
@@ -360,7 +363,7 @@ export default function OllamaModelInstaller({ onModelInstalled }: OllamaModelIn
               lastBytes = data.completed || 0;
             }
           } catch (err) {
-            console.error('Error parsing progress:', err);
+            logger.error('Error parsing progress:', err);
           }
         }
       }
@@ -371,7 +374,7 @@ export default function OllamaModelInstaller({ onModelInstalled }: OllamaModelIn
       await checkInstalledModels();
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
-      console.error(`Error updating ${modelToUpdate}:`, errorMessage);
+      logger.error(`Error updating ${modelToUpdate}:`, errorMessage);
       toast(`Failed to update ${modelToUpdate}. ${errorMessage}`);
       setModels((prev) => prev.map((m) => (m.name === modelToUpdate ? { ...m, status: 'error' } : m)));
     } finally {
